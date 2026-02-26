@@ -1,8 +1,10 @@
 #pragma once
 
 #include <charconv>
+#include <cstdint>
 #include <string_view>
 #include <optional>
+#include <string>
 
 class StringParser {
 public:
@@ -51,6 +53,9 @@ public:
         return std::string_view(m_Data.data() + m_TokenBegin, delimBegin - m_TokenBegin);
     }
 
+    template<typename T>
+    std::optional<T> Next();
+
     // Same as Next(), but doesn't advance position before reading
     // It returns a string starting from the same position as the last returned string
     std::optional<std::string_view> Reread(std::string_view delim) {
@@ -60,51 +65,6 @@ public:
         delimBegin = m_Data.find_last_not_of(" \t", delimBegin - 1) + 1;
 
         return std::string_view(m_Data.data() + m_TokenBegin, delimBegin - m_TokenBegin);
-    }
-
-    template<typename T>
-    std::optional<T> Next();
-
-    template<>
-    std::optional<std::string_view> Next<std::string_view>() {
-        if (m_TokenEnd == m_Data.size())
-            return std::nullopt;
-
-        m_TokenBegin = m_Data.find_first_not_of(" \t\n", m_TokenEnd);
-        if (m_TokenBegin == std::string::npos) {
-            m_TokenEnd = m_Data.size();
-            return std::nullopt;
-        }
-
-        m_TokenEnd = std::min(m_Data.find_first_of(" \t\n", m_TokenBegin), m_Data.size());
-
-        return std::string_view(m_Data.data() + m_TokenBegin, m_TokenEnd - m_TokenBegin);
-    }
-
-    template<>
-    std::optional<int32_t> Next<int32_t>() {
-        auto result = Next<std::string_view>();
-        if (!result)
-            return std::nullopt;
-
-        int32_t output;
-        auto ec = std::from_chars(result.value().data(), result.value().data() + result.value().size(), output);
-        if (ec.ec != std::errc{})
-            return std::nullopt;
-
-        return output;
-    }
-
-    template<>
-    std::optional<bool> Next<bool>() {
-        if (auto result = Next<std::string_view>()) {
-            if (result.value() == "true")
-                return std::optional{ true };
-            if (result.value() == "false")
-                return std::optional{ false };
-        }
-
-    	return std::nullopt;
     }
 
     std::optional<std::string_view> NextLine() {
@@ -135,3 +95,45 @@ private:
     std::string m_Data;
     size_t m_TokenBegin = 0, m_TokenEnd = 0;
 };
+
+template<>
+inline std::optional<std::string_view> StringParser::Next<std::string_view>() {
+    if (m_TokenEnd == m_Data.size())
+            return std::nullopt;
+
+    m_TokenBegin = m_Data.find_first_not_of(" \t\n", m_TokenEnd);
+    if (m_TokenBegin == std::string::npos) {
+        m_TokenEnd = m_Data.size();
+        return std::nullopt;
+    }
+
+    m_TokenEnd = std::min(m_Data.find_first_of(" \t\n", m_TokenBegin), m_Data.size());
+
+    return std::string_view(m_Data.data() + m_TokenBegin, m_TokenEnd - m_TokenBegin);
+}
+
+template<>
+inline std::optional<int32_t> StringParser::Next<int32_t>() {
+    auto result = Next<std::string_view>();
+    if (!result)
+            return std::nullopt;
+
+    int32_t output;
+    auto ec = std::from_chars(result.value().data(), result.value().data() + result.value().size(), output);
+    if (ec.ec != std::errc{})
+            return std::nullopt;
+
+    return output;
+}
+
+template<>
+inline std::optional<bool> StringParser::Next<bool>() {
+    if (auto result = Next<std::string_view>()) {
+        if (result.value() == "true")
+                return std::optional{ true };
+        if (result.value() == "false")
+                return std::optional{ false };
+    }
+
+    return std::nullopt;
+}

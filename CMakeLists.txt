@@ -84,6 +84,8 @@ else()
     message(FATAL_ERROR "Unsupported platform!")
 endif()
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE GLFW_INCLUDE_NONE)
+
 set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_STANDARD 17
     FOLDER "THINGS/"

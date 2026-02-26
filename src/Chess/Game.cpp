@@ -1,7 +1,7 @@
 #include "Game.h"
 
-#include <fstream>
 #include <sstream>
+#include <algorithm>
 
 Game::Game()
 	: m_Branches(new Branch(nullptr, 0)), m_Variation(m_Branches) {

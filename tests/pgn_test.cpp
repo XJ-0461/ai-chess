@@ -275,20 +275,20 @@ Bxc6) 6. Nxc6 bxc6 7. Bd3 O-O 8. O-O d5 9. exd5 cxd5)";
 
 		Game game2;
 
-		std::array<LongAlgebraicMove, 18> mainLine = {
+		std::array<std::string_view, 18> mainLine = {
 			"e2e4", "e7e5", "g1f3", "g8f6", "b1c3", "b8c6",
 			"d2d4", "e5d4", "f3d4", "f8b4", "d4c6", "b7c6",
 			"f1d3", "e8g8", "e1g1", "d7d5", "e4d5", "c6d5",
 		};
 
 		for (auto& move : mainLine)
-			game2.Move(move);
+			game2.Move(LongAlgebraicMove(move));
 
 		std::cout << "Position:\n" << game.GetPosition() << "\n";
 		std::cout << "Game PGN:\n" << game2 << "\n";
 
 		// Starting with 5... Bc5
-		std::array<LongAlgebraicMove, 13> variation = {
+		std::array<std::string_view, 13> variation = {
 			"f8c5",
 			"c1e3", "c5b6", "d1d2", "d7d6", "f2f3", "d8e7",
 			"e1c1", "c8d7", "f1c4", "e8c8", "d4c6", "d7c6",
@@ -300,7 +300,7 @@ Bxc6) 6. Nxc6 bxc6 7. Bd3 O-O 8. O-O d5 9. exd5 cxd5)";
 
 		std::cout << "Creating new variation...\n";
 		for (auto& move : variation)
-			game2.Move(move);
+			game2.Move(LongAlgebraicMove(move));
 
 		std::cout << "Position:\n" << game.GetPosition() << "\n";
 		std::cout << "Game PGN:\n" << game2 << "\n";

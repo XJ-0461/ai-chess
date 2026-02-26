@@ -3,7 +3,6 @@
 #include "Board.h"
 #include "Utility/StringParser.h"
 
-#include <filesystem>
 #include <ostream>
 #include <unordered_map>
 #include <vector>

@@ -89,10 +89,10 @@ void Board::FromFEN(const std::string& fen) {
         }
     }
 
-    auto playerTurn = fenParser.Next<std::string_view>().value_or("w");
+    std::string_view playerTurn = fenParser.Next<std::string_view>().value_or("w");
     m_PlayerTurn = playerTurn == "w" ? White : Black;
 
-    auto castlingRights = fenParser.Next<std::string_view>().value_or("-");
+    std::string_view castlingRights = fenParser.Next<std::string_view>().value_or("-");
     for (char c : castlingRights) {
         if (c == '-') break;
         if (c == 'K') m_CastlingPath[White | KingSide]  = s_CastlingPaths[White | KingSide];
@@ -101,7 +101,7 @@ void Board::FromFEN(const std::string& fen) {
         if (c == 'q') m_CastlingPath[Black | QueenSide] = s_CastlingPaths[Black | QueenSide];
     }
 
-    auto enPassantSquare = fenParser.Next<std::string_view>().value_or("-");
+    std::string_view enPassantSquare = fenParser.Next<std::string_view>().value_or("-");
     if (enPassantSquare != "-")
         m_EnPassantSquare = ToSquare(enPassantSquare[0], enPassantSquare[1]);
 

@@ -28,7 +28,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 #include <iostream>
 
 int main() {
-    auto app = new ChessApplication(1280, 720, "Chess");
+    auto app = new Application(1280, 720, "Chess");
     try {
         app->Run();
     }
