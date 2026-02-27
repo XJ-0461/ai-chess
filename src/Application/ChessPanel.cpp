@@ -75,7 +75,7 @@ void Application::RenderBoard() {
 void Application::RenderChessPanel() {
     RenderBoard();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0.0f, 0.0f });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.0f, 0.0f });
     ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, { 400.f, 400.f });  // For when window is floating
 
     ImGui::Begin("Chessboard");
@@ -87,13 +87,14 @@ void Application::RenderChessPanel() {
     ImVec2 viewportSize = ImGui::GetContentRegionAvail();
     m_ChessViewportSize = { viewportSize.x, viewportSize.y };
 
-    ImTextureID texture = (void*)(intptr_t)m_ChessViewport->GetColourAttachment();
-    int framePadding = 0;
+    ImTextureID texture = (uint64_t)m_ChessViewport->GetColourAttachment();
     ImVec4 backgroundColour = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
     ImVec4 tintColour = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 0.0f, 0.0f });  // Padding of the chessboard image
     // Using ImageButton instead of Image allows the viewport to
     // not be dragged when it is floating when dragging the pieces
-    ImGui::ImageButton(texture, viewportSize, { 0, 1 }, { 1, 0 }, framePadding, backgroundColour, tintColour);
+    ImGui::ImageButton("Board", texture, viewportSize, { 0, 1 }, { 1, 0 }, backgroundColour, tintColour);
+    ImGui::PopStyleVar();
 
     // Get mouse position on the board
     auto [mouseX, mouseY] = ImGui::GetMousePos();     // Absolute mouse position

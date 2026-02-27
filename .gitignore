@@ -5,3 +5,4 @@ Engines/*
 .cache/
 
 imgui.ini
+compile_commands.json
