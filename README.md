@@ -3,7 +3,7 @@
 ## Overview
 A chess GUI written in C++ using ImGui and OpenGL. It supports Windows and Linux and requires OpenGL 4.6.
 
-![](/screenshot.png?raw=true)
+![](https://raw.githubusercontent.com/cucumberbolts/Chess/refs/heads/assets/screenshot.png)
 
 ## Compiling
 
