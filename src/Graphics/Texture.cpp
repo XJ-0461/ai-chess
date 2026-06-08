@@ -29,7 +29,7 @@ Texture::Texture(const uint8_t* data, int32_t width, int32_t height) : m_Width(w
 
 Texture::Texture(const std::filesystem::path& image) {
     stbi_set_flip_vertically_on_load(1);
-    uint8_t* data = stbi_load(image.u8string().c_str(), &m_Width, &m_Height, &m_BBP, 4);
+    uint8_t* data = stbi_load(image.string().c_str(), &m_Width, &m_Height, &m_BBP, 4);
 
     glCreateTextures(GL_TEXTURE_2D, 1, &m_TextureID);
     glTextureStorage2D(m_TextureID, 1, GL_RGBA8, m_Width, m_Height);

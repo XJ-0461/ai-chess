@@ -8,6 +8,7 @@
 
 #include "Chess/Board.h"
 #include "Engine/Engine.h"
+#include "Application/AgentChat/AgentSidebar.h"
 
 #include <glm/glm.hpp>
 
@@ -80,4 +81,7 @@ private:
     std::unique_ptr<Engine> m_RunningEngine;
     Engine::BestContinuation m_BestContinuation;
     std::string m_BestContinuationAlgebraicMoves;
+
+    AgentSidebar m_WhiteSidebar{ "White Agent", "WHITE" };
+    AgentSidebar m_BlackSidebar{ "Black Agent", "BLACK" };
 };

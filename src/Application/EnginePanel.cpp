@@ -34,8 +34,8 @@ void Application::RenderEnginePanel(bool* show) {
 
                 // If the 'name' field is empty, copy the executable name to it
                 if (name[0] == '\0')
-                    //strcpy_s(name, sizeof(name), std::filesystem::path(path).stem().u8string().c_str());
-                    strcpy(name, std::filesystem::path(path).stem().u8string().c_str());
+                    //strcpy_s(name, sizeof(name), std::filesystem::path(path).stem().string().c_str());
+                    strcpy(name, std::filesystem::path(path).stem().string().c_str());
             }
 
             ImGui::InputText("name", name, sizeof(name));

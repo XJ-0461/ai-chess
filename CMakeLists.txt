@@ -19,6 +19,8 @@ set(SOURCES
     "src/Application/ChessPanel.cpp"
     "src/Application/EnginePanel.cpp"
     "src/Application/SettingsPanel.cpp"
+    "src/Application/AgentChat/AgentSidebar.h"
+    "src/Application/AgentChat/AgentSidebar.cpp"
     "src/Application/Resources.h"
 
     "src/Chess/AlgebraicMove.cpp"
@@ -85,7 +87,7 @@ else()
 endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE GLFW_INCLUDE_NONE)

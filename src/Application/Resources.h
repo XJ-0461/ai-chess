@@ -49,6 +49,16 @@ DockSpace     ID=0x3BC79352 Window=0x4647B76E Pos=0,26 Size=1600,874 Split=X Sel
     DockNode  ID=0x00000001 Parent=0x00000002 SizeRef=1280,248 Selected=0x00161063
   DockNode    ID=0x00000005 Parent=0x3BC79352 SizeRef=372,701 Selected=0x59174045
 
+[Window][White Agent]
+Pos=10,50
+Size=350,800
+Collapsed=0
+
+[Window][Black Agent]
+Pos=1240,50
+Size=350,800
+Collapsed=0
+
 )";
 
 }

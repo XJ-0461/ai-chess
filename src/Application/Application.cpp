@@ -262,7 +262,11 @@ void Application::RenderImGui() {
     if (s_ShowFENWindow) {
         ImGui::Begin("FEN", &s_ShowFENWindow);
 
-        if (ImGui::InputText("##FEN", m_BoardFEN.data(), m_BoardFEN.size(), ImGuiInputTextFlags_EnterReturnsTrue))
+        m_BoardFEN.resize(256);
+        bool entered = ImGui::InputText("##FEN", m_BoardFEN.data(), m_BoardFEN.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+        m_BoardFEN.resize(strlen(m_BoardFEN.data()));
+
+        if (entered)
             m_Board.FromFEN(m_BoardFEN);
 
         if (ImGui::Button("Copy FEN to clipboard"))
@@ -273,6 +277,8 @@ void Application::RenderImGui() {
             m_BoardFEN = Board::START_FEN;
             if (m_RunningEngine)
                 m_RunningEngine->SetPosition(m_BoardFEN);
+            m_WhiteSidebar.ClearChat();
+            m_BlackSidebar.ClearChat();
         }
 
         ImGui::End();
@@ -281,6 +287,8 @@ void Application::RenderImGui() {
     RenderChessPanel();
     RenderSettingsPanel(&s_ShowSettingsWindow);
     RenderEnginePanel(&s_ShowEngineWindow);
+    m_WhiteSidebar.Render();
+    m_BlackSidebar.Render();
 }
 
 void Application::OnWindowClose() {
