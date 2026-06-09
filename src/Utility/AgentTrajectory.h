@@ -3,6 +3,13 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <optional>
+
+enum class MoveVerificationState {
+    Unverified,
+    Verified,
+    Error
+};
 
 enum class AgentState {
     Disconnected,
@@ -13,8 +20,10 @@ enum class AgentState {
 
 struct ChatEvent {
     std::string id;
-    std::string type;    // "reasoning", "response", "error", "info"
+    std::string type;    // "reasoning", "response", "error", "info", "move"
     std::string message;
+    MoveVerificationState verificationState = MoveVerificationState::Unverified;
+    std::optional<std::string> errorMessage = std::nullopt;
 };
 
 struct AgentTrajectory {
@@ -45,5 +54,26 @@ struct AgentTrajectory {
     void SetState(AgentState newState) {
         std::lock_guard<std::mutex> lock(mtx);
         state = newState;
+    }
+
+    void SetMoveVerificationError(const std::string& moveStr, const std::string& errorMsg) {
+        std::lock_guard<std::mutex> lock(mtx);
+        for (auto it = events.rbegin(); it != events.rend(); ++it) {
+            if (it->type == "move" && it->message == moveStr) {
+                it->verificationState = MoveVerificationState::Error;
+                it->errorMessage = errorMsg;
+                break;
+            }
+        }
+    }
+
+    void SetMoveVerified(const std::string& moveStr) {
+        std::lock_guard<std::mutex> lock(mtx);
+        for (auto it = events.rbegin(); it != events.rend(); ++it) {
+            if (it->type == "move" && it->message == moveStr) {
+                it->verificationState = MoveVerificationState::Verified;
+                break;
+            }
+        }
     }
 };

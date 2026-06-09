@@ -529,6 +529,10 @@ bool Board::HasLegalMoves(Colour colour) {
     return false;
 }
 
+bool Board::IsInCheck(Colour c) const {
+    return m_PieceBitBoards[King] & m_ColourBitBoards[c] & ControlledSquares(OppositeColour(c));
+}
+
 BitBoard Board::GetPieceLegalMoves(Square piece) {
     Colour playerColour = GetColour(m_Board[piece]);
     Colour enemyColour = OppositeColour(playerColour);

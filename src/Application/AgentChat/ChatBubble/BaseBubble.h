@@ -19,6 +19,13 @@ protected:
      * AFTER the content size has been determined.
      */
     void RenderBubble(ImU32 bgColor, const std::string& label = "") {
+        float padding_x = 10.0f;
+        float padding_y = 8.0f;
+        float margin_y = 6.0f;
+
+        // Reserve space for margin and top padding
+        ImGui::Dummy(ImVec2(0.0f, margin_y + padding_y));
+
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         
         // Split draw list into 2 channels: 0 for background, 1 for text
@@ -37,10 +44,10 @@ protected:
         ImVec2 max = ImGui::GetItemRectMax();
 
         // Apply padding
-        min.x -= 10.0f;
-        min.y -= 8.0f;
-        max.x += 10.0f;
-        max.y += 8.0f;
+        min.x -= padding_x;
+        min.y -= padding_y;
+        max.x += padding_x;
+        max.y += padding_y;
 
         // Switch to background channel and draw the rect
         drawList->ChannelsSetCurrent(0);
@@ -49,9 +56,8 @@ protected:
         // Merge channels back
         drawList->ChannelsMerge();
         
-        // Add some spacing after the bubble
-        ImGui::Spacing();
-        ImGui::Spacing();
+        // Advance cursor past the bottom padding
+        ImGui::Dummy(ImVec2(0.0f, padding_y));
     }
 
     std::string m_Message;

@@ -16,7 +16,9 @@ GameOrchestrator::~GameOrchestrator() {
 }
 
 void GameOrchestrator::Start() {
-    m_Thread = std::jthread(&GameOrchestrator::OrchestratorLoop, this);
+    m_Thread = std::jthread([this]() {
+        OrchestratorLoop(std::stop_token{});
+    });
 }
 
 void GameOrchestrator::Stop() {
@@ -96,12 +98,23 @@ void GameOrchestrator::HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, s
         try {
             std::lock_guard<std::mutex> lock(*m_BoardMutex);
             AlgebraicMove am(moveStr);
+            
+            std::string beforeFEN = m_Board->ToFEN();
             m_Board->Move(am);
             
+            Colour opponentColor = m_Board->GetPlayerTurn();
+            bool isCheck = m_Board->IsInCheck(opponentColor);
+            bool missingPlus = isCheck && !(am.Flags & MoveFlag::Check) && !(am.Flags & MoveFlag::Checkmate);
+            
+            if (missingPlus) {
+                m_Board->FromFEN(beforeFEN);
+                throw IllegalMoveException(moveStr, "Move places opposing king in check but missing '+'");
+            }
+            
             m_GameHistory.push_back(moveStr);
+            activeAgent->GetTrajectory()->SetMoveVerified(moveStr);
             
             // Check for game end
-            Colour opponentColor = m_Board->GetPlayerTurn();
             if (!m_Board->HasLegalMoves(opponentColor)) {
                 std::cout << "[GameOrchestrator] Game Over!\n";
                 m_State = MatchState::GameOver;
@@ -113,11 +126,11 @@ void GameOrchestrator::HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, s
             }
         } catch (const IllegalMoveException& e) {
             std::cerr << "[GameOrchestrator] Illegal move rejected: " << moveStr << " (" << e.what() << ")\n";
-            activeAgent->GetTrajectory()->AddEvent("error", std::string("Illegal move: ") + e.what());
+            activeAgent->GetTrajectory()->SetMoveVerificationError(moveStr, std::string("Illegal move: ") + e.what());
             activeAgent->SendErrorRecovery(m_GameHistory, {e.what()});
         } catch (const InvalidAlgebraicMoveException& e) {
             std::cerr << "[GameOrchestrator] Invalid move rejected: " << moveStr << " (" << e.what() << ")\n";
-            activeAgent->GetTrajectory()->AddEvent("error", std::string("Invalid move: ") + e.what());
+            activeAgent->GetTrajectory()->SetMoveVerificationError(moveStr, std::string("Invalid move: ") + e.what());
             activeAgent->SendErrorRecovery(m_GameHistory, {e.what()});
         } catch (const std::exception& e) {
             std::cerr << "[GameOrchestrator] Fatal error during move: " << moveStr << " (" << e.what() << ")\n";

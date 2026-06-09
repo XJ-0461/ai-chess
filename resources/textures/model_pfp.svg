@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <style>
+      :root {
+        --bg-color: #2b4566;
+        --border-color: #593136;
+        --border-width: 32px;
+      }
+      .pfp-bg { fill: var(--bg-color, #2b4566); }
+      .pfp-border { 
+        fill: none; 
+        stroke: var(--border-color, #593136); 
+        stroke-width: var(--border-width, 32px);
+        stroke-alignment: inside; /* Note: standard web uses alignment tricks, handled below via positioning */
+      }
+    </style>
+  </defs>
+
+  <rect 
+    id="bg-element"
+    class="pfp-bg" 
+    x="0" 
+    y="0" 
+    width="512" 
+    height="512" 
+    fill="#2b4566" />
+
+  <rect 
+    id="border-element"
+    class="pfp-border" 
+    x="16" 
+    y="16" 
+    width="480" 
+    height="480" 
+    fill="none" 
+    stroke="#593136" 
+    stroke-width="32" />
+</svg>
+

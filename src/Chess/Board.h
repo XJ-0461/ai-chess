@@ -36,6 +36,7 @@ public:
     inline bool IsMoveLegal(LongAlgebraicMove m) { return GetPieceLegalMoves(m.SourceSquare) & (1ull << m.DestinationSquare); }
 
     bool HasLegalMoves(Colour colour);
+    bool IsInCheck(Colour colour) const;
     BitBoard GetPieceLegalMoves(Square piece);
 
     inline static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\0";

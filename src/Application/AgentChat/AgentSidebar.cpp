@@ -84,7 +84,7 @@ void AgentSidebar::Render() {
             } else if (ev.type == "response") {
                 ResponseBubble(ev.message).Render();
             } else if (ev.type == "move") {
-                MoveBubble(ev.message).Render();
+                MoveBubble(ev.message, ev.verificationState, ev.errorMessage).Render();
             } else if (ev.type == "error") {
                 InfoBubble(ev.message, true).Render();
             } else {
