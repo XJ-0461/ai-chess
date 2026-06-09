@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 void Application::RenderBoard() {
+    std::lock_guard<std::mutex> lock(*m_BoardMutex);
     Renderer::ClearScreen({ 0.0f, 0.0f, 0.0f, 1.0f });
 
     // Resize framebuffer according to viewport size
@@ -55,7 +56,7 @@ void Application::RenderBoard() {
     // Draw pieces
     for (int y = 0; y < 8; y++) {
         for (int x = 0; x < 8; x++) {
-            std::shared_ptr<SubTexture> piece = GetChessSprite(m_Board[y * 8 + x]);
+            std::shared_ptr<SubTexture> piece = GetChessSprite((*m_Board)[y * 8 + x]);
 
             if (piece && (y * 8 + x) != m_SelectedPiece)
                 Renderer::DrawRect({ -3.5f + x, -3.5f + y, 0.0f }, { 1.0f, 1.0f }, piece);
@@ -64,7 +65,7 @@ void Application::RenderBoard() {
 
     // Draw selected piece following the mouse
     if (m_SelectedPiece != INVALID_SQUARE)
-        Renderer::DrawRect({ m_BoardMousePosition.x, m_BoardMousePosition.y, 0.5f }, { 1, 1 }, GetChessSprite(m_Board[m_SelectedPiece]));
+        Renderer::DrawRect({ m_BoardMousePosition.x, m_BoardMousePosition.y, 0.5f }, { 1, 1 }, GetChessSprite((*m_Board)[m_SelectedPiece]));
 
     Renderer::Flush();
 

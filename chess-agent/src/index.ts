@@ -32,16 +32,52 @@ async function main() {
   let isGeneratingMove = false;
 
   // Graceful shutdown handling
-  const shutdown = async () => {
+  const shutdown = async (exitCode = 0) => {
     console.log(`\n[${agentName}] Shutting down ZMQ connection...`);
     await zmqClient.close();
-    process.exit(0);
+    process.exit(exitCode);
   };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => shutdown(0));
+  process.on("SIGTERM", () => shutdown(0));
+
+  const safeSend = async (msg: any) => {
+    console.log(`[ChessAgent(${myColor || agentName})] Sending Message: ${msg.type}`);
+    await zmqClient.send(msg);
+  };
+
+  // Global error handlers to forward to server
+  process.on("uncaughtException", async (err) => {
+    console.error(`[${agentName}] Uncaught Exception:`, err);
+    try {
+      await safeSend({
+        type: "ERROR",
+        level: "FATAL",
+        code: "UNCAUGHT_EXCEPTION",
+        message: err.message || String(err)
+      });
+    } catch (sendErr) {
+      console.error("Failed to send fatal error via ZMQ:", sendErr);
+    }
+    await shutdown(1);
+  });
+
+  process.on("unhandledRejection", async (reason) => {
+    console.error(`[${agentName}] Unhandled Rejection:`, reason);
+    try {
+      await safeSend({
+        type: "ERROR",
+        level: "FATAL",
+        code: "UNHANDLED_REJECTION",
+        message: reason instanceof Error ? reason.message : String(reason)
+      });
+    } catch (sendErr) {
+      console.error("Failed to send fatal error via ZMQ:", sendErr);
+    }
+    await shutdown(1);
+  });
 
   try {
-    await zmqClient.connect();
+    await zmqClient.bind();
 
     // Start listening for messages
     for await (const message of zmqClient.receiveMessages()) {
@@ -50,40 +86,50 @@ async function main() {
         continue;
       }
 
+      console.log(`[ChessAgent(${myColor || agentName})] Received Message: ${message.type}`);
+
       switch (message.type.toLowerCase()) {
         case "ping":
-          console.log(`[${agentName}] Received PING, responding with PONG`);
-          await zmqClient.send({ type: "pong" });
+          await safeSend({ type: "pong" });
           break;
 
         case "setup":
           myColor = message.color;
           console.log(`[${agentName}] Setup color: ${myColor}`);
-          await zmqClient.send({ type: "setup_ack", color: myColor });
+          await safeSend({ type: "setup_ack", color: myColor, model: modelName });
           break;
 
         case "start_move":
-          console.log(`[${agentName}] Received start_move request. Triggering move calculation...`);
           if (isGeneratingMove) {
             console.warn(`[${agentName}] Move calculation already in progress. Ignoring.`);
             break;
           }
-          await handleMoveRequest(zmqClient, openRouterClient, [], myColor || "WHITE", agentName);
+          await handleMoveRequest(zmqClient, openRouterClient, [], myColor || "WHITE", agentName, []);
           break;
 
         case "game_history":
           const history = message.game_history || [];
-          console.log(`[${agentName}] Received game_history with ${history.length} moves. Calculating next move...`);
           if (isGeneratingMove) {
             console.warn(`[${agentName}] Move calculation already in progress. Ignoring.`);
             break;
           }
-          await handleMoveRequest(zmqClient, openRouterClient, history, myColor || "WHITE", agentName);
+          await handleMoveRequest(zmqClient, openRouterClient, history, myColor || "WHITE", agentName, []);
           break;
 
         case "end_game":
           console.log(`[${agentName}] Game over! Winner: ${message.winner}, Cause: ${message.cause}`);
           await shutdown();
+          break;
+
+        case "error_recovery":
+          console.log(`[${agentName}] Received error recovery message:`, message);
+          if (isGeneratingMove) {
+            console.warn(`[${agentName}] Move calculation already in progress. Ignoring.`);
+            break;
+          }
+          const errors = message.errors || [];
+          const currentHistory = message.game_history || [];
+          await handleMoveRequest(zmqClient, openRouterClient, currentHistory, myColor || "WHITE", agentName, errors);
           break;
 
         case "error":
@@ -105,29 +151,28 @@ async function main() {
     openRouter: OpenRouterClient,
     gameHistory: string[],
     color: "WHITE" | "BLACK",
-    name: string
+    name: string,
+    previousErrors: string[]
   ) {
     isGeneratingMove = true;
     try {
       const decision = await openRouter.getNextMove(
         gameHistory,
         color,
-        async (reasoningDelta) => {
-          // Stream reasoning back to Chess server
-          await zmq.send({ type: "reasoning", message: reasoningDelta });
+        previousErrors,
+        async (reasoningDelta, id) => {
+          await safeSend({ type: "reasoning", id: id, message: reasoningDelta });
         },
-        async (responseDelta) => {
-          // Stream assistant response back to Chess server
-          await zmq.send({ type: "response", message: responseDelta });
+        async (responseDelta, id) => {
+          await safeSend({ type: "response", id: id, message: responseDelta });
         }
       );
 
       console.log(`[${name}] Generated move decision: ${decision}`);
-      // Send move decision back to server to validate/apply
-      await zmq.send({ type: "move_decision", algebraic_move_string: decision });
+      await safeSend({ type: "move_decision", algebraic_move_string: decision });
     } catch (err) {
       console.error(`[${name}] Failed to generate move decision:`, err);
-      await zmq.send({
+      await safeSend({
         type: "ERROR",
         level: "CRITICAL",
         code: "AGENT_DECISION_FAILED",
@@ -139,7 +184,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("Critical failure in main:", err);
   process.exit(1);
 });

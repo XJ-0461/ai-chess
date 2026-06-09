@@ -19,8 +19,9 @@
 
 Application* Application::s_Instance = nullptr;
 
-Application::Application(uint32_t width, uint32_t height, const std::string& name)
-    : m_WindowProperties{ width, height, name }, m_ChessViewportSize(width, height) {
+Application::Application(uint32_t width, uint32_t height, const std::string& name, const ProgramArgs& args)
+    : m_WindowProperties{ width, height, name }, m_ChessViewportSize(width, height), m_Args(args),
+      m_Board(std::make_shared<Board>()), m_BoardMutex(std::make_shared<std::mutex>()) {
     if (!s_Instance)
         s_Instance = this;
 
@@ -98,6 +99,11 @@ void Application::Run() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         
+        {
+            std::lock_guard<std::mutex> lock(*m_BoardMutex);
+            m_BoardFEN = m_Board->ToFEN();
+        }
+
         RenderImGui();
 
         ImGui::Render();
@@ -183,17 +189,31 @@ void Application::Init() {
     m_LegalMoveColour = { 1.0f, 0.0f, 1.0f, 0.5f };
     m_BackgroundColour = { 0.2f, 0.2f, 0.2f, 1.0f };
 
-    m_BoardFEN = Board::START_FEN;
-    m_BoardFEN.resize(100);
+    m_BoardFEN = m_Board->ToFEN();
 
     FramebufferSpecification spec;
     spec.Width = m_WindowProperties.Width;
     spec.Height = m_WindowProperties.Height;
     m_ChessViewport = std::make_shared<Framebuffer>(spec);
+
+    if (!m_Args.whiteEndpoint.empty()) {
+        m_WhiteAgent = std::make_shared<ZMQAgentServer>(m_Args.whiteEndpoint, "WHITE");
+        m_WhiteAgent->Start();
+        m_WhiteSidebar.SetTrajectory(m_WhiteAgent->GetTrajectory());
+    }
+
+    if (!m_Args.blackEndpoint.empty()) {
+        m_BlackAgent = std::make_shared<ZMQAgentServer>(m_Args.blackEndpoint, "BLACK");
+        m_BlackAgent->Start();
+        m_BlackSidebar.SetTrajectory(m_BlackAgent->GetTrajectory());
+    }
+
+    m_Orchestrator = std::make_shared<GameOrchestrator>(m_WhiteAgent, m_BlackAgent, m_Board, m_BoardMutex);
+    m_Orchestrator->Start();
 }
 
 void Application::RenderImGui() {
-    static bool s_ShowSettingsWindow = true, s_ShowFENWindow = true, s_ShowEngineWindow = true;
+    static bool s_ShowSettingsWindow = false, s_ShowFENWindow = false, s_ShowEngineWindow = false;
 
     {
         // Fullscreen stuff
@@ -206,7 +226,7 @@ void Application::RenderImGui() {
 
         // We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
         // because it would be confusing to have two docking targets within each others.
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
         window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize;
         window_flags |= ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
         // When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will render our background
@@ -230,29 +250,30 @@ void Application::RenderImGui() {
         ImGui::DockSpace(dockspaceID, ImVec2(0.0f, 0.0f), dockspaceFlags);
 
         if (ImGui::BeginMenuBar()) {
-            if (ImGui::BeginMenu("File")) {
-                ImGui::MenuItem("New");
-
-                ImGui::Separator();
-
-                if (ImGui::MenuItem("Quit"))
-                    m_Running = false;
-
-                ImGui::EndMenu();
-            }
-            else if (ImGui::BeginMenu("View")) {
-                if (ImGui::MenuItem("Colours")) { s_ShowSettingsWindow = true; }
-                if (ImGui::MenuItem("FEN"))     { s_ShowFENWindow     = true; }
-                if (ImGui::MenuItem("Engine"))  { s_ShowEngineWindow  = true; }
-
-                ImGui::EndMenu();
-            }
-            else if (ImGui::BeginMenu("About")) {
-                ImGui::Text("OpenGL Version: %s", Renderer::GetOpenGLVersion());
-
-                ImGui::EndMenu();
-            }
-
+                if (ImGui::BeginMenu("File")) {
+                    ImGui::MenuItem("New");
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Quit")) {
+                        m_Running = false;
+                        ImGui::EndMenu();
+                    }
+                }
+                else if (ImGui::BeginMenu("View")) {
+                    if (ImGui::MenuItem("Colours")) {
+                        s_ShowSettingsWindow = true;
+                    }
+                    if (ImGui::MenuItem("FEN")) {
+                        s_ShowFENWindow     = true;
+                    }
+                    if (ImGui::MenuItem("Engine")) {
+                        s_ShowEngineWindow  = true;
+                    }
+                    ImGui::EndMenu();
+                }
+                else if (ImGui::BeginMenu("About")) {
+                    ImGui::Text("OpenGL Version: %s", Renderer::GetOpenGLVersion());
+                    ImGui::EndMenu();
+                }
             ImGui::EndMenuBar();
         }
 
@@ -266,15 +287,20 @@ void Application::RenderImGui() {
         bool entered = ImGui::InputText("##FEN", m_BoardFEN.data(), m_BoardFEN.size(), ImGuiInputTextFlags_EnterReturnsTrue);
         m_BoardFEN.resize(strlen(m_BoardFEN.data()));
 
-        if (entered)
-            m_Board.FromFEN(m_BoardFEN);
+        if (entered) {
+            std::lock_guard<std::mutex> lock(*m_BoardMutex);
+            m_Board->FromFEN(m_BoardFEN);
+        }
 
         if (ImGui::Button("Copy FEN to clipboard"))
             glfwSetClipboardString(m_Window, m_BoardFEN.c_str());
 
         if (ImGui::Button("Reset board")) {
-            m_Board.Reset();  // Reset FEN string
-            m_BoardFEN = Board::START_FEN;
+            {
+                std::lock_guard<std::mutex> lock(*m_BoardMutex);
+                m_Board->Reset();  // Reset FEN string
+                m_BoardFEN = m_Board->ToFEN();
+            }
             if (m_RunningEngine)
                 m_RunningEngine->SetPosition(m_BoardFEN);
             m_WhiteSidebar.ClearChat();
@@ -307,6 +333,7 @@ void Application::OnKeyPressed(int32_t key, int32_t scancode, int32_t action, in
 }
 
 void Application::OnMouseButton(int32_t button, int32_t action, int32_t mods) {
+    std::lock_guard<std::mutex> lock(*m_BoardMutex);
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         // Convert ImGui viewport coordinates to rendering coordinates
         glm::vec2& point = m_BoardMousePosition;
@@ -324,8 +351,8 @@ void Application::OnMouseButton(int32_t button, int32_t action, int32_t mods) {
                 // If a piece was already selected, move piece to clicked square
                 if (m_SelectedPiece != INVALID_SQUARE && m_SelectedPiece != selectedSquare) {
                     if (m_LegalMoves & (1ull << selectedSquare) || selectedSquare == m_SelectedPiece) {
-                        m_Board.Move({ m_SelectedPiece, selectedSquare });
-                        m_BoardFEN = m_Board.ToFEN();
+                        m_Board->Move({ m_SelectedPiece, selectedSquare });
+                        m_BoardFEN = m_Board->ToFEN();
                         if (m_RunningEngine)
                             m_RunningEngine->SetPosition(m_BoardFEN);
                     }
@@ -334,7 +361,7 @@ void Application::OnMouseButton(int32_t button, int32_t action, int32_t mods) {
                     m_LegalMoves = 0;
                 }
                 else {  // If no piece already selected, select piece
-                    m_LegalMoves = m_Board.GetPieceLegalMoves(selectedSquare);
+                    m_LegalMoves = m_Board->GetPieceLegalMoves(selectedSquare);
                     m_SelectedPiece = m_LegalMoves == 0 ? INVALID_SQUARE : selectedSquare;
                 }
             }
@@ -353,8 +380,8 @@ void Application::OnMouseButton(int32_t button, int32_t action, int32_t mods) {
 
                 if (m_SelectedPiece != INVALID_SQUARE) {
                     if (m_LegalMoves & (1ull << selectedSquare)) {
-                        m_Board.Move({ m_SelectedPiece, selectedSquare });
-                        m_BoardFEN = m_Board.ToFEN();
+                        m_Board->Move({ m_SelectedPiece, selectedSquare });
+                        m_BoardFEN = m_Board->ToFEN();
                         if (m_RunningEngine)
                             m_RunningEngine->SetPosition(m_BoardFEN);
                         m_LegalMoves = 0;

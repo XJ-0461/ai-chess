@@ -60,6 +60,12 @@ set(SOURCES
     "src/Utility/FileDialog.h"
     "src/Utility/StringParser.h"
     "src/Utility/Timer.h"
+    "src/Utility/ZMQAgentServer.cpp"
+    "src/Utility/GameOrchestrator.cpp"
+    "src/Utility/AgentTrajectory.h"
+    "src/Utility/GameOrchestrator.h"
+    "src/Utility/ZMQAgentServer.h"
+    "src/Utility/ZMQPairChannel.hpp"
 )
 
 if (WIN32)
@@ -108,6 +114,38 @@ add_subdirectory(tests)
 ################################
 
 include(FetchContent)
+
+FetchContent_Declare(
+    cool_vcpkg_latest
+    GIT_REPOSITORY https://github.com/XJ-0461/cool-vcpkg.git
+    GIT_TAG "v0.1.3"
+    SOURCE_SUBDIR automatic-setup
+)
+FetchContent_MakeAvailable(cool_vcpkg_latest)
+
+include(CoolVcpkg)
+
+set(cool_vcpkg_triplet_ x64-linux)
+if (WIN32)
+    set(cool_vcpkg_triplet_ x64-windows)
+endif()
+
+cool_vcpkg_SetUpVcpkg(
+    DEFAULT_TRIPLET ${cool_vcpkg_triplet_}
+    ROOT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/external/cool-vcpkg/"
+    AUTO_UPDATE_BASELINE ON
+)
+
+cool_vcpkg_DeclarePackage(NAME nlohmann-json)
+cool_vcpkg_DeclarePackage(NAME cppzmq)
+cool_vcpkg_DeclarePackage(NAME concurrentqueue)
+
+cool_vcpkg_InstallPackages()
+
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(cppzmq CONFIG REQUIRED)
+find_package(concurrentqueue CONFIG REQUIRED)
+
 
 # set(IMGUI_VERSION "1.92.6")
 set(GLM_VERSION "1.0.3")
@@ -189,6 +227,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     imgui
     glad
     ${OPENGL_LIBRARY}
+    nlohmann_json::nlohmann_json
+    cppzmq-static
+    concurrentqueue::concurrentqueue
 )
 
 set_target_properties(glfw update_mappings glad imgui PROPERTIES FOLDER "DEPENDENCIES/")

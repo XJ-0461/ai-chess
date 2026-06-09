@@ -16,11 +16,11 @@ export class ZmqClient {
   }
 
   /**
-   * Connects the PAIR socket to the server endpoint.
+   * Binds the PAIR socket to the server endpoint.
    */
-  public async connect(): Promise<void> {
-    console.log(`Connecting ZMQ Pair socket to: ${this.endpoint}`);
-    await this.socket.connect(this.endpoint);
+  public async bind(): Promise<void> {
+    console.log(`Binding ZMQ Pair socket to: ${this.endpoint}`);
+    await this.socket.bind(this.endpoint);
     this.isConnected = true;
   }
 

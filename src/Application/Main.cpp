@@ -11,7 +11,8 @@
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     LPSTR lpCmdLine, int nCmdShow)
 {
-    auto app = new Application(1600, 900, "Chess");
+    ProgramArgs args;
+    auto app = new Application(1600, 900, "Chess", args);
     try {
         app->Run();
     }
@@ -26,9 +27,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 #else
 
 #include <iostream>
+#include <vector>
+#include <string>
 
-int main() {
-    auto app = new Application(1280, 720, "Chess");
+int main(int argc, char** argv) {
+    ProgramArgs args;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--white-endpoint" && i + 1 < argc) {
+            args.whiteEndpoint = argv[++i];
+        } else if (arg == "--black-endpoint" && i + 1 < argc) {
+            args.blackEndpoint = argv[++i];
+        }
+    }
+
+    auto app = new Application(1280, 720, "Chess", args);
     try {
         app->Run();
     }

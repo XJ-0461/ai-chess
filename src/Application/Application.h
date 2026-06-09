@@ -2,6 +2,7 @@
 
 #include <array>
 #include <string>
+#include <memory>
 
 #include "Graphics/Framebuffer.h"
 #include "Graphics/SubTexture.h"
@@ -9,14 +10,20 @@
 #include "Chess/Board.h"
 #include "Engine/Engine.h"
 #include "Application/AgentChat/AgentSidebar.h"
+#include "Utility/GameOrchestrator.h"
 
 #include <glm/glm.hpp>
 
 struct GLFWwindow;
 
+struct ProgramArgs {
+    std::string whiteEndpoint;
+    std::string blackEndpoint;
+};
+
 class Application {
 public:
-    Application(uint32_t width, uint32_t height, const std::string& name);
+    Application(uint32_t width, uint32_t height, const std::string& name, const ProgramArgs& args);
     Application(const Application&) = delete;
     Application(Application&&) = delete;
 
@@ -58,7 +65,10 @@ private:
 
     bool m_Running = false;
 
-    Board m_Board;
+    std::shared_ptr<Board> m_Board;
+    std::shared_ptr<std::mutex> m_BoardMutex;
+    std::shared_ptr<GameOrchestrator> m_Orchestrator;
+
     Square m_SelectedPiece = INVALID_SQUARE;
     bool m_IsHoldingPiece = false;  // If the selected piece follows the mouse
     BitBoard m_LegalMoves = 0;
@@ -84,4 +94,8 @@ private:
 
     AgentSidebar m_WhiteSidebar{ "White Agent", "WHITE" };
     AgentSidebar m_BlackSidebar{ "Black Agent", "BLACK" };
+
+    std::shared_ptr<ZMQAgentServer> m_WhiteAgent;
+    std::shared_ptr<ZMQAgentServer> m_BlackAgent;
+    ProgramArgs m_Args;
 };

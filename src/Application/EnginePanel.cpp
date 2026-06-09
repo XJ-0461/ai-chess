@@ -11,6 +11,7 @@ void Application::RenderEnginePanel(bool* show) {
     if (!*show)
         return;
 
+    std::lock_guard<std::mutex> lock(*m_BoardMutex);
     ImGui::Begin("Engine", show);
 
     static auto s_SelectedEngine = m_Engines.end();
@@ -121,11 +122,11 @@ void Application::RenderEnginePanel(bool* show) {
 
             if (!m_BestContinuation.Mate) {
                 float score = (float)m_BestContinuation.Score * 0.01f;
-                if (m_Board.GetPlayerTurn() == Black) score *= -1.0f;
+                if (m_Board->GetPlayerTurn() == Black) score *= -1.0f;
 
                 ImGui::Text("Score: %.2f", score);
             } else {
-                const char* text = (m_Board.GetPlayerTurn() == White) ? "Score: M%i" : "Score: -M%i";
+                const char* text = (m_Board->GetPlayerTurn() == White) ? "Score: M%i" : "Score: -M%i";
                 ImGui::Text(text, m_BestContinuation.Score);
             }
 
@@ -160,7 +161,11 @@ void Application::RenderEnginePanel(bool* show) {
 void Application::OnEngineUpdate(const Engine::BestContinuation& bestContinuation) {
     m_BestContinuation = bestContinuation;
 
-    Board moveTranslator(m_Board);
+    Board moveTranslator;
+    {
+        std::lock_guard<std::mutex> lock(*m_BoardMutex);
+        moveTranslator = *m_Board;
+    }
 
     std::ostringstream continuationText;
     for (LongAlgebraicMove m : m_BestContinuation.Continuation)
