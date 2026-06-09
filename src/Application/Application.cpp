@@ -208,7 +208,7 @@ void Application::Init() {
         m_BlackSidebar.SetTrajectory(m_BlackAgent->GetTrajectory());
     }
 
-    m_Orchestrator = std::make_shared<GameOrchestrator>(m_WhiteAgent, m_BlackAgent, m_Board, m_BoardMutex);
+    m_Orchestrator = std::make_shared<GameOrchestrator>(m_WhiteAgent, m_BlackAgent, m_Board, m_BoardMutex, m_Args.retrospectiveRounds);
     m_Orchestrator->Start();
 }
 

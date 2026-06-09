@@ -13,6 +13,8 @@ enum class MatchState {
     PendingSetup,
     WhiteTurn,
     BlackTurn,
+    WhiteRetrospective,
+    BlackRetrospective,
     GameOver
 };
 
@@ -22,7 +24,8 @@ public:
         std::shared_ptr<ZMQAgentServer> whiteAgent,
         std::shared_ptr<ZMQAgentServer> blackAgent,
         std::shared_ptr<Board> board,
-        std::shared_ptr<std::mutex> boardMutex
+        std::shared_ptr<std::mutex> boardMutex,
+        uint32_t retrospectiveRounds = 0
     );
     ~GameOrchestrator();
 
@@ -35,6 +38,7 @@ public:
 private:
     void OrchestratorLoop(std::stop_token st);
     void HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, std::shared_ptr<ZMQAgentServer> opponentAgent, MatchState nextState);
+    void HandleRetrospective(std::shared_ptr<ZMQAgentServer> activeAgent, std::shared_ptr<ZMQAgentServer> opponentAgent, MatchState nextState);
 
     std::shared_ptr<ZMQAgentServer> m_WhiteAgent;
     std::shared_ptr<ZMQAgentServer> m_BlackAgent;
@@ -44,4 +48,9 @@ private:
     std::vector<std::string> m_GameHistory;
     MatchState m_State = MatchState::PendingSetup;
     std::jthread m_Thread;
+
+    uint32_t m_RetrospectiveRounds = 0;
+    uint32_t m_CurrentRetrospectiveRound = 0;
+    std::string m_Winner = "DRAW";
+    std::string m_EndCause = "UNKNOWN";
 };

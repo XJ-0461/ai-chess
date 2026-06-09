@@ -2,6 +2,7 @@
 #include <imgui.h>
 #include "ChatBubble/ReasoningBubble.h"
 #include "ChatBubble/ResponseBubble.h"
+#include "ChatBubble/QuipBubble.h"
 #include "ChatBubble/MoveBubble.h"
 #include "ChatBubble/InfoBubble.h"
 
@@ -83,6 +84,8 @@ void AgentSidebar::Render() {
                 ReasoningBubble(ev.message).Render();
             } else if (ev.type == "response") {
                 ResponseBubble(ev.message).Render();
+            } else if (ev.type == "quip") {
+                QuipBubble(ev.message).Render();
             } else if (ev.type == "move") {
                 MoveBubble(ev.message, ev.verificationState, ev.errorMessage).Render();
             } else if (ev.type == "error") {

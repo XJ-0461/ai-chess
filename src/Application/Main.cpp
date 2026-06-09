@@ -38,6 +38,8 @@ int main(int argc, char** argv) {
             args.whiteEndpoint = argv[++i];
         } else if (arg == "--black-endpoint" && i + 1 < argc) {
             args.blackEndpoint = argv[++i];
+        } else if (arg == "--retrospective-rounds" && i + 1 < argc) {
+            args.retrospectiveRounds = std::stoul(argv[++i]);
         }
     }
 

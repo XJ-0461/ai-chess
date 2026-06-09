@@ -59,11 +59,21 @@ void ZMQAgentServer::HandleMessage(const nlohmann::json& j) {
         m_Trajectory->UpdateEvent(id, "reasoning", j.value("message", ""));
     } else if (type == "response") {
         m_Trajectory->UpdateEvent(id, "response", j.value("message", ""));
+    } else if (type == "quip") {
+        m_Trajectory->UpdateEvent(id, "quip", j.value("message", ""));
+        if (m_Quips) {
+            m_Quips->enqueue(j.value("message", ""));
+        }
+    } else if (type == "fetch_board_state") {
+        std::lock_guard<std::mutex> lock(m_BoardStateRequestsMtx);
+        m_BoardStateRequests.push({id});
+    } else if (type == "end_turn") {
+        std::lock_guard<std::mutex> lock(m_EndTurnRequestsMtx);
+        m_EndTurnRequests.push({id});
     } else if (type == "move_decision") {
         m_Trajectory->SetState(AgentState::Idle);
         std::string move = j.value("algebraic_move_string", "");
         m_Trajectory->AddEvent("move", move);
-        
         std::lock_guard<std::mutex> lock(m_MoveDecisionsMtx);
         m_MoveDecisions.push(move);
     } else if (type == "ERROR") {
@@ -92,6 +102,29 @@ std::optional<std::string> ZMQAgentServer::PopError() {
     return err;
 }
 
+std::optional<ZMQAgentServer::BoardStateRequest> ZMQAgentServer::PopBoardStateRequest() {
+    std::lock_guard<std::mutex> lock(m_BoardStateRequestsMtx);
+    if (m_BoardStateRequests.empty()) return std::nullopt;
+    auto req = m_BoardStateRequests.front();
+    m_BoardStateRequests.pop();
+    return req;
+}
+
+std::optional<ZMQAgentServer::EndTurnRequest> ZMQAgentServer::PopEndTurn() {
+    std::lock_guard<std::mutex> lock(m_EndTurnRequestsMtx);
+    if (m_EndTurnRequests.empty()) return std::nullopt;
+    auto req = m_EndTurnRequests.front();
+    m_EndTurnRequests.pop();
+    return req;
+}
+
+void ZMQAgentServer::SendBoardStateResponse(const std::string& id, const nlohmann::json& data) {
+    nlohmann::json j = data;
+    j["type"] = "board_state_response";
+    j["id"] = id;
+    m_Channel->SendMessage(j.dump());
+}
+
 void ZMQAgentServer::SendPing() {
     std::cout << m_LogTag << " Sending Message: ping\n";
     nlohmann::json j = {{"type", "ping"}};
@@ -104,9 +137,17 @@ void ZMQAgentServer::SendSetup(const std::string& color) {
     m_Channel->SendMessage(j.dump());
 }
 
-void ZMQAgentServer::SendMoveRequest() {
+// refactor the "start_move" request to include the move history AND any potential quips sent by the opponent.
+void ZMQAgentServer::SendMoveRequest(
+    const std::vector<std::string>& history,
+    const std::vector<std::string>& opponent_quips
+) {
     std::cout << m_LogTag << " Sending Message: start_move\n";
-    nlohmann::json j = {{"type", "start_move"}};
+    nlohmann::json j = {
+        {"type", "start_move"},
+        {"game_history", history},
+        {"opponent_quips", opponent_quips}
+    };
     m_Channel->SendMessage(j.dump());
 }
 
@@ -125,5 +166,17 @@ void ZMQAgentServer::SendErrorRecovery(const std::vector<std::string>& history, 
 void ZMQAgentServer::SendEndGame(const std::string& winner, const std::string& cause) {
     std::cout << m_LogTag << " Sending Message: end_game\n";
     nlohmann::json j = {{"type", "end_game"}, {"winner", winner}, {"cause", cause}};
+    m_Channel->SendMessage(j.dump());
+}
+
+void ZMQAgentServer::SendRetrospectiveRequest(const std::vector<std::string>& history, const std::vector<std::string>& opponent_quips, const std::string& winner, const std::string& cause) {
+    std::cout << m_LogTag << " Sending Message: retrospective_request\n";
+    nlohmann::json j = {
+        {"type", "retrospective_request"},
+        {"game_history", history},
+        {"opponent_quips", opponent_quips},
+        {"winner", winner},
+        {"cause", cause}
+    };
     m_Channel->SendMessage(j.dump());
 }

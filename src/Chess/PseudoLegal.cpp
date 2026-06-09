@@ -287,7 +287,9 @@ namespace PseudoLegal {
         // The square doesn't actually block the pawn, which is
         // why it is added after the above if-statement
         // (Blockers are attacked by pawns)
-        blockers |= 1ull << enPassant;
+        if (enPassant != 0) {
+            blockers |= 1ull << enPassant;
+        }
 
         pawnMoves &= ~(blockers & BitBoardFile(square));
         pawnMoves &= ~(blockers ^ ~BitBoardFile(square));

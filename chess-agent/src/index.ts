@@ -31,6 +31,8 @@ async function main() {
   let myColor: "WHITE" | "BLACK" | null = null;
   let isGeneratingMove = false;
 
+  const pendingRequests = new Map<string, (response: any) => void>();
+
   // Graceful shutdown handling
   const shutdown = async (exitCode = 0) => {
     console.log(`\n[${agentName}] Shutting down ZMQ connection...`);
@@ -100,24 +102,28 @@ async function main() {
           break;
 
         case "start_move":
+          const startHistory = message.game_history || [];
+          const startQuips = message.opponent_quips || [];
           if (isGeneratingMove) {
             console.warn(`[${agentName}] Move calculation already in progress. Ignoring.`);
             break;
           }
-          await handleMoveRequest(zmqClient, openRouterClient, [], myColor || "WHITE", agentName, []);
+          await handleMoveRequest(zmqClient, openRouterClient, startHistory, startQuips, myColor || "WHITE", agentName, []);
           break;
 
         case "game_history":
           const history = message.game_history || [];
+          const quips = message.opponent_quips || [];
           if (isGeneratingMove) {
             console.warn(`[${agentName}] Move calculation already in progress. Ignoring.`);
             break;
           }
-          await handleMoveRequest(zmqClient, openRouterClient, history, myColor || "WHITE", agentName, []);
+          await handleMoveRequest(zmqClient, openRouterClient, history, quips, myColor || "WHITE", agentName, []);
           break;
 
         case "end_game":
           console.log(`[${agentName}] Game over! Winner: ${message.winner}, Cause: ${message.cause}`);
+          // await handleEndGameRetrospective(...), should have access to the history, up-to-date quips, but should be instructed to analyze the game from its perspective and quip the opponent
           await shutdown();
           break;
 
@@ -129,11 +135,36 @@ async function main() {
           }
           const errors = message.errors || [];
           const currentHistory = message.game_history || [];
-          await handleMoveRequest(zmqClient, openRouterClient, currentHistory, myColor || "WHITE", agentName, errors);
+          const currentQuips = message.opponent_quips || [];
+          await handleMoveRequest(zmqClient, openRouterClient, currentHistory, currentQuips, myColor || "WHITE", agentName, errors);
           break;
 
         case "error":
           console.error(`[${agentName}] Received server error:`, message);
+          break;
+
+        case "retrospective_request":
+          console.log(`[${agentName}] Received retrospective request`);
+          const retroHistory = message.game_history || [];
+          const retroQuips = message.opponent_quips || [];
+          await handleRetrospectiveRequest(
+            zmqClient,
+            openRouterClient,
+            retroHistory,
+            retroQuips,
+            myColor || "WHITE",
+            agentName,
+            message.winner || "DRAW",
+            message.cause || "UNKNOWN"
+          );
+          break;
+
+        case "board_state_response":
+          console.log(`[${agentName}] Received board state response:\n${JSON.stringify(message, null, 2)}`);
+          if (pendingRequests.has(message.id)) {
+            pendingRequests.get(message.id)!(message);
+            pendingRequests.delete(message.id);
+          }
           break;
 
         default:
@@ -150,6 +181,7 @@ async function main() {
     zmq: ZmqClient,
     openRouter: OpenRouterClient,
     gameHistory: string[],
+    opponentQuips: string[],
     color: "WHITE" | "BLACK",
     name: string,
     previousErrors: string[]
@@ -158,6 +190,7 @@ async function main() {
     try {
       const decision = await openRouter.getNextMove(
         gameHistory,
+        opponentQuips,
         color,
         previousErrors,
         async (reasoningDelta, id) => {
@@ -165,6 +198,25 @@ async function main() {
         },
         async (responseDelta, id) => {
           await safeSend({ type: "response", id: id, message: responseDelta });
+        },
+        async (quipMessage, id) => {
+          await safeSend({ type: "quip", id: id, message: quipMessage });
+        },
+        async (id) => {
+          return new Promise((resolve, reject) => {
+            pendingRequests.set(id, resolve);
+            safeSend({ type: "fetch_board_state", id: id }).catch((err) => {
+              pendingRequests.delete(id);
+              reject(err);
+            });
+
+            setTimeout(() => {
+              if (pendingRequests.has(id)) {
+                pendingRequests.delete(id);
+                resolve({ error: "Timeout fetching board state" });
+              }
+            }, 10000);
+          });
         }
       );
 
@@ -180,6 +232,41 @@ async function main() {
       });
     } finally {
       isGeneratingMove = false;
+    }
+  }
+
+  async function handleRetrospectiveRequest(
+    zmq: ZmqClient,
+    openRouter: OpenRouterClient,
+    gameHistory: string[],
+    opponentQuips: string[],
+    color: "WHITE" | "BLACK",
+    name: string,
+    winner: string,
+    cause: string
+  ) {
+    try {
+      await openRouter.getRetrospective(
+        gameHistory,
+        opponentQuips,
+        color,
+        winner,
+        cause,
+        async (reasoningDelta, id) => {
+          await safeSend({ type: "reasoning", id: id, message: reasoningDelta });
+        },
+        async (responseDelta, id) => {
+          await safeSend({ type: "response", id: id, message: responseDelta });
+        },
+        async (quipMessage, id) => {
+          await safeSend({ type: "quip", id: id, message: quipMessage });
+        }
+      );
+
+      await safeSend({ type: "end_turn", id: `${name}-retro-done` });
+    } catch (err) {
+      console.error(`[${name}] Failed to generate retrospective:`, err);
+      await safeSend({ type: "end_turn", id: `${name}-retro-failed` });
     }
   }
 }

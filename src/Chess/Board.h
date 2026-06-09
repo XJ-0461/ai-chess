@@ -37,6 +37,7 @@ public:
 
     bool HasLegalMoves(Colour colour);
     bool IsInCheck(Colour colour) const;
+    bool IsInCheckmate(Colour colour);
     BitBoard GetPieceLegalMoves(Square piece);
 
     inline static const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\0";

@@ -13,6 +13,7 @@
 #       --white-model <MODEL> \
 #       --black-port <PORT> \
 #       --black-model <MODEL> \
+#       --retrospective-rounds <INT> \
 #       --openrouter-api-key <KEY> \
 #       --chess-server <FILEPATH_TO_SERVER> \
 #       --chess-agent-client <FILEPATH_TO_AGENT>
@@ -22,6 +23,7 @@
 #   --white-model <MODEL>               OpenRouter model name for the White Agent
 #   --black-port <PORT>                 ZMQ port for the Black Agent (e.g. 5556)
 #   --black-model <MODEL>               OpenRouter model name for the Black Agent
+#   --retrospective-rounds <INT>        Number of retrospective rounds for agents (optional, default: 0)
 #   --openrouter-api-key <KEY>          OpenRouter API key
 #   --chess-server <FILEPATH>           Path to the Chess C++ server executable
 #   --chess-agent-client <FILEPATH>     Path to the agent client index.ts or dist/index.js
@@ -35,6 +37,7 @@ WHITE_PORT=""
 WHITE_MODEL=""
 BLACK_PORT=""
 BLACK_MODEL=""
+RETROSPECTIVE_ROUNDS=0
 OPENROUTER_API_KEY=""
 CHESS_SERVER=""
 CHESS_AGENT_CLIENT=""
@@ -47,6 +50,7 @@ print_usage() {
     echo "  --white-model <MODEL>               OpenRouter model name for White Agent"
     echo "  --black-port <PORT>                 ZMQ port for Black Agent"
     echo "  --black-model <MODEL>               OpenRouter model name for Black Agent"
+    echo "  --retrospective-rounds <INT>        Number of retrospective rounds for agents (optional, default: 0)"
     echo "  --openrouter-api-key <KEY>          OpenRouter API key"
     echo "  --chess-server <FILEPATH>           Path to the Chess server executable"
     echo "  --chess-agent-client <FILEPATH>     Path to the chess-agent client (TypeScript or JavaScript)"
@@ -70,6 +74,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --black-model)
             BLACK_MODEL="$2"
+            shift 2
+            ;;
+        --retrospective-rounds)
+            RETROSPECTIVE_ROUNDS="$2"
             shift 2
             ;;
         --openrouter-api-key)
@@ -184,4 +192,4 @@ sleep 1.5
 # Run Chess server in the foreground
 echo "[start_chess_match] Launching Chess Server..."
 chmod +x "$CHESS_SERVER"
-"$CHESS_SERVER" --white-endpoint "tcp://127.0.0.1:$WHITE_PORT" --black-endpoint "tcp://127.0.0.1:$BLACK_PORT"
+"$CHESS_SERVER" --retrospective-rounds $RETROSPECTIVE_ROUNDS --white-endpoint "tcp://127.0.0.1:$WHITE_PORT" --black-endpoint "tcp://127.0.0.1:$BLACK_PORT"

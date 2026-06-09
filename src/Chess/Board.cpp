@@ -672,3 +672,7 @@ BitBoard Board::ControlledSquares(Colour c) const {
 
     return controlledSquares;
 }
+
+bool Board::IsInCheckmate(Colour colour) {
+    return IsInCheck(colour) && !HasLegalMoves(colour);
+}

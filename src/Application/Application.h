@@ -19,6 +19,7 @@ struct GLFWwindow;
 struct ProgramArgs {
     std::string whiteEndpoint;
     std::string blackEndpoint;
+    uint32_t retrospectiveRounds = 0;
 };
 
 class Application {
