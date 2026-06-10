@@ -57,6 +57,8 @@ set(SOURCES
     "src/Graphics/VertexArray.h"
     "src/Graphics/VertexArray.cpp"
 
+    "src/Graphics/Pieces/PieceAtlas.hpp"
+
     "src/Utility/FileDialog.h"
     "src/Utility/StringParser.h"
     "src/Utility/Timer.h"
@@ -93,7 +95,7 @@ else()
 endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-    CXX_STANDARD 20
+    CXX_STANDARD 26
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE GLFW_INCLUDE_NONE)
@@ -101,6 +103,13 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE GLFW_INCLUDE_NONE)
 target_include_directories(${PROJECT_NAME}
     PRIVATE
     "src/"
+    "${CMAKE_CURRENT_BINARY_DIR}/resources/"
+)
+
+target_compile_options(
+    ${PROJECT_NAME}
+    PRIVATE
+    "--embed-dir=${CMAKE_CURRENT_BINARY_DIR}/resources/"
 )
 
 ###############
@@ -139,13 +148,40 @@ cool_vcpkg_SetUpVcpkg(
 cool_vcpkg_DeclarePackage(NAME nlohmann-json)
 cool_vcpkg_DeclarePackage(NAME cppzmq)
 cool_vcpkg_DeclarePackage(NAME concurrentqueue)
+cool_vcpkg_DeclarePackage(NAME sdl3 VERSION "3.4.10#1")
 
 cool_vcpkg_InstallPackages()
 
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 find_package(concurrentqueue CONFIG REQUIRED)
+find_package(SDL3 CONFIG REQUIRED)
 
+function(Chess_GenerateAtlas_Pieces PNG_PATH)
+
+    find_program(_imagemagick_exe NAMES magick)
+
+    if(NOT _imagemagick_exe)
+        message(FATAL_ERROR "ImageMagick not found. RGBA atlas generation can not be performed.")
+        return()
+    endif()
+
+    set(OUTPUT_RGBA "${CMAKE_CURRENT_BINARY_DIR}/resources/Pieces.rgba")
+    get_filename_component(OUTPUT_DIR "${OUTPUT_RGBA}" DIRECTORY)
+
+    add_custom_command(
+        OUTPUT "${OUTPUT_RGBA}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_DIR}"
+        COMMAND ${_imagemagick_exe} "${PNG_PATH}" -depth 8 "rgba:${OUTPUT_RGBA}"
+        DEPENDS "${PNG_PATH}"
+        COMMENT "Generating RGBA atlas: ${OUTPUT_RGBA}"
+        VERBATIM
+    )
+
+    target_sources(${PROJECT_NAME} PRIVATE "${OUTPUT_RGBA}")
+endfunction()
+
+Chess_GenerateAtlas_Pieces("${CMAKE_CURRENT_SOURCE_DIR}/resources/textures/Pieces.png")
 
 # set(IMGUI_VERSION "1.92.6")
 set(GLM_VERSION "1.0.3")
@@ -230,6 +266,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json
     cppzmq-static
     concurrentqueue::concurrentqueue
+    SDL3::SDL3
 )
 
 set_target_properties(glfw update_mappings glad imgui PROPERTIES FOLDER "DEPENDENCIES/")

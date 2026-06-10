@@ -1,5 +1,7 @@
 #include "Application.h"
 
+#include "Graphics/Pieces/PieceAtlas.hpp"
+
 #ifdef _WIN32
 
 #include <GLFW/glfw3.h>
