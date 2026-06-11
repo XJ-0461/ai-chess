@@ -1,3 +1,5 @@
+#ifdef IGNORE_THIS_FILE_
+
 #pragma once
 
 #include "SubTexture.h"
@@ -33,3 +35,5 @@ public:
     
     static void ClearScreen(glm::vec4 colour);
 };
+
+#endif

@@ -2,16 +2,12 @@
 
 #include <array>
 #include <stdexcept>
+#include <span>
 #include <string_view>
 
 #include <SDL3/SDL.h>
 
-struct RGBA {
-    std::uint8_t red;
-    std::uint8_t green;
-    std::uint8_t blue;
-    std::uint8_t alpha;
-};
+#include "../RGBA.hpp"
 
 static constexpr std::uint8_t kPieceAtlasBytes[] = {
     #embed "Pieces.rgba"

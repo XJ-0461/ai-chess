@@ -40,23 +40,25 @@ set(SOURCES
     "src/Engine/EngineException.h"
     "src/Engine/Option.h"
 
-    "src/Graphics/Buffer.h"
-    "src/Graphics/Buffer.cpp"
-    "src/Graphics/DebugContext.h"
-    "src/Graphics/DebugContext.cpp"
-    "src/Graphics/Framebuffer.h"
-    "src/Graphics/Framebuffer.cpp"
-    "src/Graphics/Renderer.h"
-    "src/Graphics/Renderer.cpp"
-    "src/Graphics/Shader.h"
-    "src/Graphics/Shader.cpp"
-    "src/Graphics/SubTexture.h"
-    "src/Graphics/SubTexture.cpp"
-    "src/Graphics/Texture.h"
-    "src/Graphics/Texture.cpp"
-    "src/Graphics/VertexArray.h"
-    "src/Graphics/VertexArray.cpp"
+#    "src/Graphics/Buffer.h"
+#    "src/Graphics/Buffer.cpp"
+#    "src/Graphics/DebugContext.h"
+#    "src/Graphics/DebugContext.cpp"
+#    "src/Graphics/Framebuffer.h"
+#    "src/Graphics/Framebuffer.cpp"
+#    "src/Graphics/Renderer.h"
+#    "src/Graphics/Renderer.cpp"
+#    "src/Graphics/Shader.h"
+#    "src/Graphics/Shader.cpp"
+#    "src/Graphics/SubTexture.h"
+#    "src/Graphics/SubTexture.cpp"
+#    "src/Graphics/Texture.h"
+#    "src/Graphics/Texture.cpp"
+#    "src/Graphics/VertexArray.h"
+#    "src/Graphics/VertexArray.cpp"
 
+    src/Graphics/RGBA.hpp
+    src/Graphics/Board/BoardAtlas.hpp
     "src/Graphics/Pieces/PieceAtlas.hpp"
 
     "src/Utility/FileDialog.h"
@@ -149,6 +151,7 @@ cool_vcpkg_DeclarePackage(NAME nlohmann-json)
 cool_vcpkg_DeclarePackage(NAME cppzmq)
 cool_vcpkg_DeclarePackage(NAME concurrentqueue)
 cool_vcpkg_DeclarePackage(NAME sdl3 VERSION "3.4.10#1")
+cool_vcpkg_DeclarePackage(NAME imgui VERSION "1.92.8#0" FEATURES sdl3-binding sdl3-renderer-binding sdlgpu3-binding)
 
 cool_vcpkg_InstallPackages()
 
@@ -156,36 +159,53 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 find_package(concurrentqueue CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
-function(Chess_GenerateAtlas_Pieces PNG_PATH)
+function(Chess_GenerateAtlas)
+    set(oneValueArgs PNG_PATH OUTPUT_PATH)
+    cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
 
-    find_program(_imagemagick_exe NAMES magick)
-
-    if(NOT _imagemagick_exe)
-        message(FATAL_ERROR "ImageMagick not found. RGBA atlas generation can not be performed.")
-        return()
+    if(NOT ARG_PNG_PATH)
+        message(FATAL_ERROR "Chess_GenerateAtlas: PNG_PATH is required")
     endif()
 
-    set(OUTPUT_RGBA "${CMAKE_CURRENT_BINARY_DIR}/resources/Pieces.rgba")
-    get_filename_component(OUTPUT_DIR "${OUTPUT_RGBA}" DIRECTORY)
+    if(NOT ARG_OUTPUT_PATH)
+        message(FATAL_ERROR "Chess_GenerateAtlas: OUTPUT_PATH is required")
+    endif()
+
+    find_program(_imagemagick_exe NAMES magick convert)
+
+    if(NOT _imagemagick_exe)
+        message(FATAL_ERROR "ImageMagick ('magick' or 'convert') not found. RGBA atlas generation cannot be performed.")
+    endif()
+
+    get_filename_component(OUTPUT_DIR "${ARG_OUTPUT_PATH}" DIRECTORY)
 
     add_custom_command(
-        OUTPUT "${OUTPUT_RGBA}"
+        OUTPUT "${ARG_OUTPUT_PATH}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_DIR}"
-        COMMAND ${_imagemagick_exe} "${PNG_PATH}" -depth 8 "rgba:${OUTPUT_RGBA}"
-        DEPENDS "${PNG_PATH}"
-        COMMENT "Generating RGBA atlas: ${OUTPUT_RGBA}"
+        COMMAND "${_imagemagick_exe}" "${ARG_PNG_PATH}" -depth 8 "rgba:${ARG_OUTPUT_PATH}"
+        DEPENDS "${ARG_PNG_PATH}"
+        COMMENT "Generating RGBA atlas: ${ARG_OUTPUT_PATH}"
         VERBATIM
     )
 
-    target_sources(${PROJECT_NAME} PRIVATE "${OUTPUT_RGBA}")
+    target_sources(${PROJECT_NAME} PRIVATE "${ARG_OUTPUT_PATH}")
 endfunction()
 
-Chess_GenerateAtlas_Pieces("${CMAKE_CURRENT_SOURCE_DIR}/resources/textures/Pieces.png")
+Chess_GenerateAtlas(
+    PNG_PATH "${CMAKE_CURRENT_SOURCE_DIR}/resources/textures/Pieces.png"
+    OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/resources/Pieces.rgba"
+)
+
+Chess_GenerateAtlas(
+    PNG_PATH "${CMAKE_CURRENT_SOURCE_DIR}/resources/textures/Board.png"
+    OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/resources/Board.rgba"
+)
 
 # set(IMGUI_VERSION "1.92.6")
-set(GLM_VERSION "1.0.3")
-set(GLFW_VERSION "3.4")
+#set(GLM_VERSION "1.0.3")
+#set(GLFW_VERSION "3.4")
 
 # GLFW
 set(BUILD_SHARED_LIBS OFF)
@@ -194,74 +214,78 @@ set(GLFW_BUILD_TESTS OFF)
 set(GLFW_BUILD_DOCS OFF)
 set(GLFW_INSTALL OFF)
 
-FetchContent_Declare(
-    imgui
-    DOWNLOAD_EXTRACT_TIMESTAMP OFF
-    # URL https://github.com/ocornut/imgui/archive/refs/tags/v${IMGUI_VERSION}.tar.gz
-    GIT_REPOSITORY https://github.com/ocornut/imgui
-    GIT_TAG 934c6a5f5ef2355d6df25395d555cb71f790c4e9
-)
+#FetchContent_Declare(
+#    imgui
+#    DOWNLOAD_EXTRACT_TIMESTAMP OFF
+#    # URL https://github.com/ocornut/imgui/archive/refs/tags/v${IMGUI_VERSION}.tar.gz
+#    GIT_REPOSITORY https://github.com/ocornut/imgui
+#    GIT_TAG 934c6a5f5ef2355d6df25395d555cb71f790c4e9
+#)
 
-FetchContent_Declare(
-    glm
-    DOWNLOAD_EXTRACT_TIMESTAMP OFF
-    URL https://github.com/g-truc/glm/releases/download/${GLM_VERSION}/glm-${GLM_VERSION}.7z
-)
+#FetchContent_Declare(
+#    glm
+#    DOWNLOAD_EXTRACT_TIMESTAMP OFF
+#    URL https://github.com/g-truc/glm/releases/download/${GLM_VERSION}/glm-${GLM_VERSION}.7z
+#)
+#
+#FetchContent_Declare(
+#    glfw
+#    DOWNLOAD_EXTRACT_TIMESTAMP OFF
+#    URL https://github.com/glfw/glfw/archive/refs/tags/${GLFW_VERSION}.tar.gz
+#)
+#
+#FetchContent_MakeAvailable(
+#    #imgui
+#    glm glfw)
 
-FetchContent_Declare(
-    glfw
-    DOWNLOAD_EXTRACT_TIMESTAMP OFF
-    URL https://github.com/glfw/glfw/archive/refs/tags/${GLFW_VERSION}.tar.gz
-)
+#set(IMGUI_SOURCES
+#    "${imgui_SOURCE_DIR}/imconfig.h"
+#    "${imgui_SOURCE_DIR}/imgui.cpp"
+#    "${imgui_SOURCE_DIR}/imgui_demo.cpp"
+#    "${imgui_SOURCE_DIR}/imgui_draw.cpp"
+#    "${imgui_SOURCE_DIR}/imgui.h"
+#    "${imgui_SOURCE_DIR}/imgui_internal.h"
+#    "${imgui_SOURCE_DIR}/imgui_tables.cpp"
+#    "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
+#    "${imgui_SOURCE_DIR}/imstb_rectpack.h"
+#    "${imgui_SOURCE_DIR}/imstb_textedit.h"
+#    "${imgui_SOURCE_DIR}/imstb_truetype.h"
+#
+#    "${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
+#    "${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp"
+#)
+#
+#add_library(imgui ${IMGUI_SOURCES})
 
-FetchContent_MakeAvailable(imgui glm glfw)
-
-set(IMGUI_SOURCES
-    "${imgui_SOURCE_DIR}/imconfig.h"
-    "${imgui_SOURCE_DIR}/imgui.cpp"
-    "${imgui_SOURCE_DIR}/imgui_demo.cpp"
-    "${imgui_SOURCE_DIR}/imgui_draw.cpp"
-    "${imgui_SOURCE_DIR}/imgui.h"
-    "${imgui_SOURCE_DIR}/imgui_internal.h"
-    "${imgui_SOURCE_DIR}/imgui_tables.cpp"
-    "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
-    "${imgui_SOURCE_DIR}/imstb_rectpack.h"
-    "${imgui_SOURCE_DIR}/imstb_textedit.h"
-    "${imgui_SOURCE_DIR}/imstb_truetype.h"
-
-    "${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
-    "${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp"
-)
-
-add_library(imgui ${IMGUI_SOURCES})
-
-target_include_directories(
-    imgui
-    PUBLIC
-    ${imgui_SOURCE_DIR}
-)
-
-target_link_libraries(imgui PRIVATE glfw)
-target_compile_definitions(imgui PRIVATE GLFW_INCLUDE_NONE)
+#target_include_directories(
+#    imgui
+#    PUBLIC
+#    ${imgui_SOURCE_DIR}
+#)
+#
+#target_link_libraries(imgui PRIVATE glfw)
+#target_compile_definitions(imgui PRIVATE GLFW_INCLUDE_NONE)
 
 #############
 # Find OpenGL
 #############
 
-find_package(OpenGL REQUIRED)
-if (NOT OpenGL_FOUND)
-    message(FATAL_ERROR "OpenGL not found")
-endif()
-message("OPENGL_FOUND:${OpenGL_FOUND}")
-message("OPENGL_LIBRARIES:${OpenGL_LIBRARIES}")
+#find_package(OpenGL REQUIRED)
+#if (NOT OpenGL_FOUND)
+#    message(FATAL_ERROR "OpenGL not found")
+#endif()
+#message("OPENGL_FOUND:${OpenGL_FOUND}")
+#message("OPENGL_LIBRARIES:${OpenGL_LIBRARIES}")
 
 # glad
 add_subdirectory(lib/glad)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    glfw
-    imgui
-    glad
+target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE
+#    glfw
+    imgui::imgui
+#    glad
     ${OPENGL_LIBRARY}
     nlohmann_json::nlohmann_json
     cppzmq-static
@@ -269,11 +293,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     SDL3::SDL3
 )
 
-set_target_properties(glfw update_mappings glad imgui PROPERTIES FOLDER "DEPENDENCIES/")
-
-target_include_directories(${PROJECT_NAME}
-    PRIVATE
-    "lib/stb_image/"
-    "${glm_SOURCE_DIR}/"
-    "${imgui_SOURCE_DIR}/imgui/"
-)
+#set_target_properties(glfw update_mappings glad imgui PROPERTIES FOLDER "DEPENDENCIES/")
+#
+#target_include_directories(${PROJECT_NAME}
+#    PRIVATE
+#    "lib/stb_image/"
+#    "${glm_SOURCE_DIR}/"
+#    "${imgui_SOURCE_DIR}/imgui/"
+#)

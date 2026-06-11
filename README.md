@@ -30,6 +30,14 @@ cmake --build build --config Release
 Note: If you modify the resources in the resources/ directory,
 run `python embed_resources.py` to regenerate the resource file.
 
+## Running
+
+On Linux, Wayland support may be spotty, force X11:
+```shell
+export SDL_VIDEO_DRIVER=x11
+./Chess
+```
+
 ## Future features
 - Better UCI engine integration with evaluation bar and engine settings
 - PGN

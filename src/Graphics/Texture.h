@@ -1,3 +1,5 @@
+#ifdef IGNORE_THIS_FILE_
+
 #pragma once
 
 #include <filesystem>
@@ -33,3 +35,5 @@ private:
 
     int32_t m_Width = 0, m_Height = 0, m_BBP = 0;
 };
+
+#endif

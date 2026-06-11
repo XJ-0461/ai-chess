@@ -24,7 +24,7 @@ public:
     ~AgentSidebar() = default;
 
     void Render();
-    
+
     void SetTrajectory(std::shared_ptr<AgentTrajectory> trajectory) { m_Trajectory = trajectory; }
     void ClearChat();
 
