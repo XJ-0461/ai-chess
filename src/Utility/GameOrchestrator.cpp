@@ -18,8 +18,8 @@ GameOrchestrator::~GameOrchestrator() {
 }
 
 void GameOrchestrator::Start() {
-    m_Thread = std::jthread([this]() {
-        OrchestratorLoop(std::stop_token{});
+    m_Thread = std::jthread([this](std::stop_token st) {
+        OrchestratorLoop(st);
     });
 }
 

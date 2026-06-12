@@ -50,8 +50,8 @@ public:
             return; // Already running
         }
         // std::jthread passes its stop_token automatically as the first parameter
-        io_thread_ = std::jthread([this]() {
-            WorkerLoop(std::stop_token{});
+        io_thread_ = std::jthread([this](std::stop_token st) {
+            WorkerLoop(st);
         });
     }
 

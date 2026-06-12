@@ -24,14 +24,16 @@ public:
     ~AgentSidebar() = default;
 
     void Render();
-    
+
     void SetTrajectory(std::shared_ptr<AgentTrajectory> trajectory) { m_Trajectory = trajectory; }
+    void SetHeaderFont(struct ImFont* font) { m_HeaderFont = font; }
     void ClearChat();
 
 private:
     std::string m_Title;        // Window title (e.g. "White Agent" or "Black Agent")
     std::string m_ColorName;    // "WHITE" or "BLACK"
     std::shared_ptr<AgentTrajectory> m_Trajectory;
+    struct ImFont* m_HeaderFont = nullptr;
 
     bool m_AutoScroll = true;   // Auto-scroll enabled by default
     bool m_ScrollToBottom = false;

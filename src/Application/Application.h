@@ -3,23 +3,30 @@
 #include <array>
 #include <string>
 #include <memory>
+#include <atomic>
 
-#include "Graphics/Framebuffer.h"
-#include "Graphics/SubTexture.h"
+#include <SDL3/SDL.h>
+
+#include "Graphics/Pieces/PieceAtlas.hpp"
+#include "Graphics/Board/BoardAtlas.hpp"
 
 #include "Chess/Board.h"
 #include "Engine/Engine.h"
 #include "Application/AgentChat/AgentSidebar.h"
+#include "Application/CentralChessboardPanel.h"
+#include "Application/Layout.hpp"
 #include "Utility/GameOrchestrator.h"
-
-#include <glm/glm.hpp>
-
-struct GLFWwindow;
 
 struct ProgramArgs {
     std::string whiteEndpoint;
     std::string blackEndpoint;
     uint32_t retrospectiveRounds = 0;
+};
+
+struct TextureResources {
+    std::shared_ptr<PaletteSwappedPieceAtlas> white_pieces{};
+    std::shared_ptr<PaletteSwappedPieceAtlas> black_pieces{};
+    std::shared_ptr<PaletteSwappedBoardAtlas> board{};
 };
 
 class Application {
@@ -35,9 +42,13 @@ public:
 
     static Application& Get() { return *s_Instance; }
 
-    GLFWwindow* GetGLFWWindow() const { return m_Window; }
+    SDL_Window* GetWindow() const { return m_Window; }
+    SDL_Renderer* GetRenderer() const { return m_Renderer.get(); }
 
     void Run();
+
+    void UpdatePlayerColorPalette(Colour piece_color, PieceColorPaletteT palette);
+
 private:
     void Init();
     void RenderBoard();
@@ -46,18 +57,20 @@ private:
     void RenderEnginePanel(bool* show);
     void RenderSettingsPanel(bool* show);
 
-    std::shared_ptr<SubTexture> GetChessSprite(Piece p);
+    TextureView GetChessSprite(Piece p);
 
     void OnWindowClose();
     void OnWindowResize(int32_t width, int32_t height);
-    void OnKeyPressed(int32_t key, int32_t scancode, int32_t action, int32_t mods);
-    void OnMouseButton(int32_t button, int32_t action, int32_t mods);
+    void OnKeyPressed(SDL_Keycode key);
+    void OnMouseButton(const SDL_MouseButtonEvent& event);
 
     void OnEngineUpdate(const Engine::BestContinuation& bestContinuation);
+
 private:
     static Application* s_Instance;
 
-    GLFWwindow* m_Window = nullptr;
+    SDL_Window* m_Window = nullptr;
+    std::shared_ptr<SDL_Renderer> m_Renderer = nullptr;
 
     struct {
         uint32_t Width, Height;
@@ -75,18 +88,21 @@ private:
     BitBoard m_LegalMoves = 0;
     std::string m_BoardFEN;
 
-    std::array<std::shared_ptr<SubTexture>, 12> m_ChessPieceSprites;
+    std::string m_WhiteModelName = "";
+    std::string m_BlackModelName = "";
+    std::atomic<bool> m_WhitePaletteNeedsUpdate = false;
+    std::atomic<bool> m_BlackPaletteNeedsUpdate = false;
 
-    std::shared_ptr<Framebuffer> m_ChessViewport;
-    glm::vec2 m_ChessViewportSize;
-    glm::vec2 m_BoardMousePosition;
-    glm::mat4 m_CoordinateTransform;
+    TextureResources m_TextureResources;
 
-    // TODO: Make a 'Settings' struct and UI
-    glm::vec4 m_LightSquareColour;
-    glm::vec4 m_DarkSquareColour;
-    glm::vec4 m_LegalMoveColour;
-    glm::vec4 m_BackgroundColour;
+    struct ImFont* m_HeaderFont = nullptr;
+
+    SDL_Texture* m_BoardTargetTexture = nullptr;
+    SDL_FPoint m_ChessViewportSize;
+    SDL_FPoint m_BoardMousePosition;
+
+    SDL_Color m_LegalMoveColour;
+    SDL_Color m_BackgroundColour;
 
     std::vector<std::pair<std::string, std::filesystem::path>> m_Engines;  // Name, path
     std::unique_ptr<Engine> m_RunningEngine;
@@ -95,6 +111,9 @@ private:
 
     AgentSidebar m_WhiteSidebar{ "White Agent", "WHITE" };
     AgentSidebar m_BlackSidebar{ "Black Agent", "BLACK" };
+    CentralChessboardPanel m_CentralPanel;
+
+    Layout<AgentSidebar, CentralChessboardPanel, AgentSidebar> m_Layout{ &m_WhiteSidebar, &m_CentralPanel, &m_BlackSidebar };
 
     std::shared_ptr<ZMQAgentServer> m_WhiteAgent;
     std::shared_ptr<ZMQAgentServer> m_BlackAgent;

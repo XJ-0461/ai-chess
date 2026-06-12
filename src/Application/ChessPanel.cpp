@@ -1,3 +1,5 @@
+#ifdef IGNORE_THIS_FILE_
+
 #include "Application.h"
 
 #include "Graphics/Renderer.h"
@@ -111,3 +113,5 @@ void Application::RenderChessPanel() {
 
     ImGui::PopStyleVar(2);
 }
+
+#endif

@@ -1,3 +1,5 @@
+#ifdef IGNORE_THIS_FILE_
+
 #include "Application.h"
 
 #include <imgui.h>
@@ -56,3 +58,5 @@ void Application::RenderSettingsPanel(bool* show) {
 
     ImGui::End();
 }
+
+#endif

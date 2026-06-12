@@ -1,3 +1,5 @@
+#ifdef IGNORE_THIS_FILE_
+
 #pragma once
 
 #include "Texture.h"
@@ -16,3 +18,5 @@ private:
 
 	glm::vec2 m_TextureCoordinates[4] = { { 0, 0 } };
 };
+
+#endif

@@ -52,8 +52,9 @@ void ZMQAgentServer::HandleMessage(const nlohmann::json& j) {
         m_Trajectory->AddEvent("info", "Received PONG");
     } else if (type == "setup_ack") {
         m_SetupAckReceived = true;
-        m_Trajectory->modelName = j.value("model", "Unknown Model");
-        m_Trajectory->AddEvent("info", "Agent ready (" + j.value("color", "unknown") + ") - " + m_Trajectory->modelName);
+        std::string model = j.value("model", "Unknown Model");
+        m_Trajectory->UpdateModelName(model);
+        m_Trajectory->AddEvent("info", "Agent ready (" + j.value("color", "unknown") + ") - " + model);
     } else if (type == "reasoning") {
         m_Trajectory->SetState(AgentState::Thinking);
         m_Trajectory->UpdateEvent(id, "reasoning", j.value("message", ""));
