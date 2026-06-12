@@ -4,6 +4,7 @@
 #include <vector>
 #include <mutex>
 #include <optional>
+#include <functional>
 
 enum class MoveVerificationState {
     Unverified,
@@ -31,6 +32,22 @@ struct AgentTrajectory {
     std::string modelName = "Unknown Model";
     std::vector<ChatEvent> events;
     std::mutex mtx;
+
+    std::function<void(const std::string&)> onModelUpdateCallback;
+
+    void SetOnModelUpdateCallback(std::function<void(const std::string&)> cb) {
+        onModelUpdateCallback = cb;
+    }
+
+    void UpdateModelName(const std::string& name) {
+        {
+            std::lock_guard<std::mutex> lock(mtx);
+            modelName = name;
+        }
+        if (onModelUpdateCallback) {
+            onModelUpdateCallback(name);
+        }
+    }
 
     void UpdateEvent(const std::string& id, const std::string& type, const std::string& message) {
         std::lock_guard<std::mutex> lock(mtx);

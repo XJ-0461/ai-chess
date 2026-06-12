@@ -3,14 +3,18 @@
 #include <array>
 #include <string>
 #include <memory>
+#include <atomic>
 
 #include <SDL3/SDL.h>
+
 #include "Graphics/Pieces/PieceAtlas.hpp"
 #include "Graphics/Board/BoardAtlas.hpp"
 
 #include "Chess/Board.h"
 #include "Engine/Engine.h"
 #include "Application/AgentChat/AgentSidebar.h"
+#include "Application/CentralChessboardPanel.h"
+#include "Application/Layout.hpp"
 #include "Utility/GameOrchestrator.h"
 
 struct ProgramArgs {
@@ -22,7 +26,7 @@ struct ProgramArgs {
 struct TextureResources {
     std::shared_ptr<PaletteSwappedPieceAtlas> white_pieces{};
     std::shared_ptr<PaletteSwappedPieceAtlas> black_pieces{};
-    std::shared_ptr<PaletteSwappedBoard> board{};
+    std::shared_ptr<PaletteSwappedBoardAtlas> board{};
 };
 
 class Application {
@@ -42,6 +46,9 @@ public:
     SDL_Renderer* GetRenderer() const { return m_Renderer.get(); }
 
     void Run();
+
+    void UpdatePlayerColorPalette(Colour piece_color, PieceColorPaletteT palette);
+
 private:
     void Init();
     void RenderBoard();
@@ -81,7 +88,14 @@ private:
     BitBoard m_LegalMoves = 0;
     std::string m_BoardFEN;
 
+    std::string m_WhiteModelName = "";
+    std::string m_BlackModelName = "";
+    std::atomic<bool> m_WhitePaletteNeedsUpdate = false;
+    std::atomic<bool> m_BlackPaletteNeedsUpdate = false;
+
     TextureResources m_TextureResources;
+
+    struct ImFont* m_HeaderFont = nullptr;
 
     SDL_Texture* m_BoardTargetTexture = nullptr;
     SDL_FPoint m_ChessViewportSize;
@@ -97,6 +111,9 @@ private:
 
     AgentSidebar m_WhiteSidebar{ "White Agent", "WHITE" };
     AgentSidebar m_BlackSidebar{ "Black Agent", "BLACK" };
+    CentralChessboardPanel m_CentralPanel;
+
+    Layout<AgentSidebar, CentralChessboardPanel, AgentSidebar> m_Layout{ &m_WhiteSidebar, &m_CentralPanel, &m_BlackSidebar };
 
     std::shared_ptr<ZMQAgentServer> m_WhiteAgent;
     std::shared_ptr<ZMQAgentServer> m_BlackAgent;

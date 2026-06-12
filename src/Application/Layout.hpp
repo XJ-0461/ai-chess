@@ -1,68 +1,68 @@
 #pragma once
 
 #include <imgui.h>
-#include <functional>
+#include <concepts>
 #include <string>
 
 template <typename T>
-concept IsRenderableT = // T.Render() exists
+concept IsRenderable = requires(T a) {
+    { a.Render() } -> std::same_as<void>;
+};
 
-template <IsRenderableT LeftSidebar, IsRenderableT MainContent, IsRenderableT RightSidebar>
+template <typename T>
+using observer_ptr = T*;
+
+template <IsRenderable LeftSidebar, IsRenderable MainContent, IsRenderable RightSidebar>
 struct Layout {
-
-    // template <IsRenderableT Content>
-    // struct Panel {
-    //     float WidthRatio = 0.0f;
-    //     Content panel_content;
-    // };
-
     std::string Id = "MainThreeColumnLayout";
 
-    LeftSidebar left_sidebar;
-    MainContent main_content;
-    RightSidebar right_sidebar;
+    observer_ptr<LeftSidebar> left_sidebar;
+    observer_ptr<MainContent> main_content;
+    observer_ptr<RightSidebar> right_sidebar;
 
-    template <IsRenderableT LeftSidebarType, IsRenderableT MainContentType, IsRenderableT RightSidebarType>
-    Layout(LeftSidebarType lhs, MainContentType main_content, RightSidebarType rhs)
-        : left_sidebar(lhs), main_content(main_content), right_sidebar(rhs) {}
+    Layout(observer_ptr<LeftSidebar> lhs, observer_ptr<MainContent> main, observer_ptr<RightSidebar> rhs)
+        : left_sidebar(lhs), main_content(main), right_sidebar(rhs) {}
 
-    // Pass 'const' because rendering shouldn't mutate the layout configuration
     void Render() const {
-        // Table flags: No borders, stretch to fit available width, don't extend past the bottom
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoHostExtendY;
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
 
-        if (ImGui::BeginTable(Id.c_str(), 3, tableFlags, ImGui::GetContentRegionAvail())) {
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | 
+                                      ImGuiWindowFlags_NoMove | 
+                                      ImGuiWindowFlags_NoResize | 
+                                      ImGuiWindowFlags_NoSavedSettings | 
+                                      ImGuiWindowFlags_NoBringToFrontOnFocus |
+                                      ImGuiWindowFlags_NoBackground;
 
-            // Register columns with their assigned percentage weights
-            ImGui::TableSetupColumn("LeftCol",  ImGuiTableColumnFlags_WidthStretch, LeftPanel.WidthRatio);
-            ImGui::TableSetupColumn("MainCol",  ImGuiTableColumnFlags_WidthStretch, MainPanel.WidthRatio);
-            ImGui::TableSetupColumn("RightCol", ImGuiTableColumnFlags_WidthStretch, RightPanel.WidthRatio);
+        if (ImGui::Begin("##LayoutWindow", nullptr, windowFlags)) {
+            ImGuiTableFlags tableFlags = ImGuiTableFlags_SizingStretchSame | 
+                                         ImGuiTableFlags_NoHostExtendY |
+                                         ImGuiTableFlags_NoBordersInBody;
 
-            // --- Left Panel ---
-            ImGui::TableNextColumn();
-            if (ImGui::BeginChild("LeftChild", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_None)) {
-                if (LeftPanel.RenderContent)
-                    LeftPanel.RenderContent();
-                ImGui::EndChild();
+            if (ImGui::BeginTable(Id.c_str(), 3, tableFlags, ImGui::GetContentRegionAvail())) {
+                ImGui::TableSetupColumn("LeftCol",  ImGuiTableColumnFlags_WidthStretch, 0.25f);
+                ImGui::TableSetupColumn("MainCol",  ImGuiTableColumnFlags_WidthStretch, 0.50f);
+                ImGui::TableSetupColumn("RightCol", ImGuiTableColumnFlags_WidthStretch, 0.25f);
+
+                ImGui::TableNextColumn();
+                if (left_sidebar) {
+                    left_sidebar->Render();
+                }
+
+                ImGui::TableNextColumn();
+                if (main_content) {
+                    main_content->Render();
+                }
+
+                ImGui::TableNextColumn();
+                if (right_sidebar) {
+                    right_sidebar->Render();
+                }
+
+                ImGui::EndTable();
             }
-
-            // --- Main Panel ---
-            ImGui::TableNextColumn();
-            if (ImGui::BeginChild("MainChild", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_None)) {
-                if (MainPanel.RenderContent)
-                    MainPanel.RenderContent();
-                ImGui::EndChild();
-            }
-
-            // --- Right Panel ---
-            ImGui::TableNextColumn();
-            if (ImGui::BeginChild("RightChild", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_None)) {
-                if (RightPanel.RenderContent)
-                    RightPanel.RenderContent();
-                ImGui::EndChild();
-            }
-
-            ImGui::EndTable();
         }
+        ImGui::End();
     }
 };

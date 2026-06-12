@@ -1,8 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cctype>
+#include <optional>
 #include <stdexcept>
 #include <span>
+#include <string>
 #include <string_view>
 
 #include <SDL3/SDL.h>
@@ -35,6 +39,208 @@ constexpr PieceColorPaletteT kBasicBlackColorPalette {
     RGBA{ 65,  58,  66,  255 },
     RGBA{ 31,  31,  41,  255 }
 };
+
+constexpr PieceColorPaletteT kNvidiaWhiteColorPalette {
+    RGBA{ 255, 255, 255, 255 },
+    RGBA{ 240, 255, 240, 255 },
+    RGBA{ 118,   185, 0, 255 },
+    RGBA{ 31,   31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kNvidiaBlackColorPalette {
+    RGBA{ 240, 255, 240, 255 },
+    RGBA{ 118,  185,  0, 255 },
+    RGBA{ 77,  122,  0,  255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kQwenWhiteColorPalette {
+    RGBA{ 240, 237, 255, 255 },
+    RGBA{ 208, 200, 255, 255 },
+    RGBA{ 138, 122, 255, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kQwenBlackColorPalette {
+    RGBA{ 208, 200, 255, 255 },
+    RGBA{ 138, 122, 255, 255 },
+    RGBA{ 90,  77,  184, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kClaudeWhiteColorPalette {
+    RGBA{ 255, 250, 245, 255 },
+    RGBA{ 245, 235, 224, 255 },
+    RGBA{ 217, 119, 87,  255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kClaudeBlackColorPalette {
+    RGBA{ 245, 235, 224, 255 },
+    RGBA{ 217, 119, 87,  255 },
+    RGBA{ 150, 78,  57,  255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kGeminiWhiteColorPalette {
+    RGBA{ 238, 244, 255, 255 },
+    RGBA{ 192, 217, 255, 255 },
+    RGBA{ 71,  150, 227, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kGeminiBlackColorPalette {
+    RGBA{ 192, 217, 255, 255 },
+    RGBA{ 71,  150, 227, 255 },
+    RGBA{ 42,  90,  138, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMistralWhiteColorPalette {
+    RGBA{ 255, 242, 234, 255 },
+    RGBA{ 255, 216, 192, 255 },
+    RGBA{ 255, 102, 51,  255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMistralBlackColorPalette {
+    RGBA{ 255, 216, 192, 255 },
+    RGBA{ 255, 102, 51,  255 },
+    RGBA{ 179, 71,  36,  255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kPoolsideWhiteColorPalette {
+    RGBA{ 158, 150, 255, 255 },
+    RGBA{ 65,  55,  255, 255 },
+    RGBA{ 37,  25,  255, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kPoolsideBlackColorPalette {
+    RGBA{ 65,  55,  255, 255 },
+    RGBA{ 37,  25,  255, 255 },
+    RGBA{ 26,  18,  179, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kOpenrouterWhiteColorPalette {
+    RGBA{ 199, 209, 224, 255 },
+    RGBA{ 150, 162, 179, 255 },
+    RGBA{ 123, 136, 153, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kOpenrouterBlackColorPalette {
+    RGBA{ 150, 162, 179, 255 },
+    RGBA{ 123, 136, 153, 255 },
+    RGBA{ 90,  99,  112, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kKimiWhiteColorPalette {
+    RGBA{ 128, 200, 255, 255 },
+    RGBA{ 0,   145, 255, 255 },
+    RGBA{ 0,   122, 204, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kKimiBlackColorPalette {
+    RGBA{ 0,   145, 255, 255 },
+    RGBA{ 0,   122, 204, 255 },
+    RGBA{ 0,   90,  153, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMinimaxWhiteColorPalette {
+    RGBA{ 255, 166, 181, 255 },
+    RGBA{ 255, 77,  109, 255 },
+    RGBA{ 230, 0,   69,  255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMinimaxBlackColorPalette {
+    RGBA{ 255, 77,  109, 255 },
+    RGBA{ 230, 0,   69,  255 },
+    RGBA{ 179, 0,   54,  255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMicrosoftWhiteColorPalette {
+    RGBA{ 255, 185, 0,   255 },
+    RGBA{ 242, 80,  34,  255 },
+    RGBA{ 127, 186, 0,   255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMicrosoftBlackColorPalette {
+    RGBA{ 242, 80,  34,  255 },
+    RGBA{ 127, 186, 0,   255 },
+    RGBA{ 0,   164, 239, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMetaWhiteColorPalette {
+    RGBA{ 235, 245, 255, 255 },
+    RGBA{ 0,   129, 255, 255 },
+    RGBA{ 6,   104, 225, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kMetaBlackColorPalette {
+    RGBA{ 0,   129, 255, 255 },
+    RGBA{ 6,   104, 225, 255 },
+    RGBA{ 5,   77,  167, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kDeepseekWhiteColorPalette {
+    RGBA{ 240, 242, 255, 255 },
+    RGBA{ 77,  107, 255, 255 },
+    RGBA{ 61,  80,  255, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+constexpr PieceColorPaletteT kDeepseekBlackColorPalette {
+    RGBA{ 77,  107, 255, 255 },
+    RGBA{ 61,  80,  255, 255 },
+    RGBA{ 45,  58,  191, 255 },
+    RGBA{ 31,  31,  41,  255 }
+};
+
+struct ModelProviderColorPaletteDetails {
+    std::string_view provider;
+    PieceColorPaletteT white_palette;
+    PieceColorPaletteT black_palette;
+};
+
+static constexpr std::array<ModelProviderColorPaletteDetails, 12> kModelProviderColorPalettes {
+    ModelProviderColorPaletteDetails{ "nvidia",     kNvidiaWhiteColorPalette,     kNvidiaBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "qwen",       kQwenWhiteColorPalette,       kQwenBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "claude",     kClaudeWhiteColorPalette,     kClaudeBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "gemini",     kGeminiWhiteColorPalette,     kGeminiBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "mistral",    kMistralWhiteColorPalette,    kMistralBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "poolside",   kPoolsideWhiteColorPalette,   kPoolsideBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "openrouter", kOpenrouterWhiteColorPalette, kOpenrouterBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "kimi",       kKimiWhiteColorPalette,       kKimiBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "minimax",    kMinimaxWhiteColorPalette,    kMinimaxBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "microsoft",  kMicrosoftWhiteColorPalette,  kMicrosoftBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "meta",       kMetaWhiteColorPalette,       kMetaBlackColorPalette },
+    ModelProviderColorPaletteDetails{ "deepseek",   kDeepseekWhiteColorPalette,    kDeepseekBlackColorPalette }
+};
+
+// if the `str` (lowcase) contains any of the .provider keywords, then return that ColorPaletteDetails object
+inline std::optional<ModelProviderColorPaletteDetails> PaletteDetailsFromString(const std::string& str) {
+    std::string lowerStr = str;
+    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+    for (const auto& palette_details : kModelProviderColorPalettes) {
+        if (lowerStr.find(palette_details.provider) != std::string::npos) {
+            return palette_details;
+        }
+    }
+    return std::nullopt;
+}
 
 namespace detail {
 

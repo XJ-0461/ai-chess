@@ -1,6 +1,5 @@
-#include "Application.h"
-#include "Resources.h"
-#include "Chess/Board.h"
+
+#include <iostream>
 
 #include <SDL3/SDL.h>
 
@@ -8,7 +7,10 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 
-#include <iostream>
+#include "Application.h"
+#include "Resources.h"
+#include "Chess/Board.h"
+#include "Graphics/Font/PixelOperatorSCBold.hpp"
 
 Application* Application::s_Instance = nullptr;
 
@@ -112,6 +114,22 @@ void Application::Run() {
             m_BoardFEN = m_Board->ToFEN();
         }
 
+        if (m_WhitePaletteNeedsUpdate) {
+            m_WhitePaletteNeedsUpdate = false;
+            auto details = PaletteDetailsFromString(m_WhiteModelName);
+            if (details) {
+                UpdatePlayerColorPalette(White, details->white_palette);
+            }
+        }
+
+        if (m_BlackPaletteNeedsUpdate) {
+            m_BlackPaletteNeedsUpdate = false;
+            auto details = PaletteDetailsFromString(m_BlackModelName);
+            if (details) {
+                UpdatePlayerColorPalette(Black, details->black_palette);
+            }
+        }
+
         RenderImGui();
 
         ImGui::Render();
@@ -148,6 +166,15 @@ TextureView Application::GetChessSprite(Piece p) {
     throw std::runtime_error("Invalid Piece enum!");
 }
 
+void Application::UpdatePlayerColorPalette(Colour piece_color, PieceColorPaletteT palette) {
+    if (piece_color == White) {
+        m_TextureResources.white_pieces = std::make_shared<PaletteSwappedPieceAtlas>(palette, m_Renderer);
+    } else {
+        m_TextureResources.black_pieces = std::make_shared<PaletteSwappedPieceAtlas>(palette, m_Renderer);
+    }
+    m_CentralPanel.SetPieceAtlases(m_TextureResources.white_pieces, m_TextureResources.black_pieces);
+}
+
 void Application::Init() {
     ImGuiIO& io = ImGui::GetIO();
     (void)io;
@@ -160,6 +187,10 @@ void Application::Init() {
     void* font = (void*)Resources::Fonts::Roboto::ROBOTO_REGULAR;
     int32_t fontSize = sizeof(Resources::Fonts::Roboto::ROBOTO_REGULAR);
     io.FontDefault = io.Fonts->AddFontFromMemoryTTF(font, fontSize, 20.0f, &fontConfig);
+
+    m_HeaderFont = io.Fonts->AddFontFromMemoryTTF((void*)kPixelOperatorSCBoldTFFBytes, sizeof(kPixelOperatorSCBoldTFFBytes), 24.0f, &fontConfig);
+    m_WhiteSidebar.SetHeaderFont(m_HeaderFont);
+    m_BlackSidebar.SetHeaderFont(m_HeaderFont);
 
     if (!std::filesystem::exists("imgui.ini"))
         ImGui::LoadIniSettingsFromMemory(Resources::DEFAULT_IMGUI_INI);
@@ -179,7 +210,12 @@ void Application::Init() {
     // Instantiate our palette-swapped resources.
     m_TextureResources.white_pieces = std::make_shared<PaletteSwappedPieceAtlas>(kBasicWhiteColorPalette, m_Renderer);
     m_TextureResources.black_pieces = std::make_shared<PaletteSwappedPieceAtlas>(kBasicBlackColorPalette, m_Renderer);
-    m_TextureResources.board = std::make_shared<PaletteSwappedBoard>(kBasicBoardColorPalette, m_Renderer);
+    m_TextureResources.board = std::make_shared<PaletteSwappedBoardAtlas>(kCreamBlueBoardColorPalette, m_Renderer);
+
+    m_CentralPanel.SetPieceAtlases(m_TextureResources.white_pieces, m_TextureResources.black_pieces);
+    m_CentralPanel.SetBoardAtlas(m_TextureResources.board);
+    m_CentralPanel.SetGameState(m_Board, m_BoardMutex);
+    m_CentralPanel.SetInteractionState(&m_SelectedPiece, &m_LegalMoves, &m_IsHoldingPiece);
 
     m_LegalMoveColour = { 255, 0, 255, 127 };
     m_BackgroundColour = { 51, 51, 51, 255 };
@@ -193,12 +229,20 @@ void Application::Init() {
         m_WhiteAgent = std::make_shared<ZMQAgentServer>(m_Args.whiteEndpoint, "WHITE");
         m_WhiteAgent->Start();
         m_WhiteSidebar.SetTrajectory(m_WhiteAgent->GetTrajectory());
+        m_WhiteAgent->GetTrajectory()->SetOnModelUpdateCallback([this](const std::string& name) {
+            m_WhiteModelName = name;
+            m_WhitePaletteNeedsUpdate = true;
+        });
     }
 
     if (!m_Args.blackEndpoint.empty()) {
         m_BlackAgent = std::make_shared<ZMQAgentServer>(m_Args.blackEndpoint, "BLACK");
         m_BlackAgent->Start();
         m_BlackSidebar.SetTrajectory(m_BlackAgent->GetTrajectory());
+        m_BlackAgent->GetTrajectory()->SetOnModelUpdateCallback([this](const std::string& name) {
+            m_BlackModelName = name;
+            m_BlackPaletteNeedsUpdate = true;
+        });
     }
 
     m_Orchestrator = std::make_shared<GameOrchestrator>(m_WhiteAgent, m_BlackAgent, m_Board, m_BoardMutex, m_Args.retrospectiveRounds);
@@ -236,6 +280,8 @@ void Application::RenderImGui() {
         ImGui::EndMainMenuBar();
     }
 
+    m_Layout.Render();
+
     if (s_ShowFENWindow) {
         ImGui::Begin("FEN", &s_ShowFENWindow);
 
@@ -265,13 +311,8 @@ void Application::RenderImGui() {
 
         ImGui::End();
     }
-
-    // RenderChessPanel();
-    // RenderSettingsPanel(&s_ShowSettingsWindow);
-    // RenderEnginePanel(&s_ShowEngineWindow);
-    m_WhiteSidebar.Render();
-    m_BlackSidebar.Render();
 }
+
 
 void Application::OnWindowClose() {
     m_Running = false;
@@ -294,69 +335,5 @@ void Application::OnKeyPressed(SDL_Keycode key) {
 }
 
 void Application::OnMouseButton(const SDL_MouseButtonEvent& event) {
-    std::lock_guard<std::mutex> lock(*m_BoardMutex);
-    if (event.button == SDL_BUTTON_LEFT) {
-        // Use the board mouse position calculated in ChessPanel.cpp
-        SDL_FPoint& point = m_BoardMousePosition;
-
-        if (event.down) {
-            m_IsHoldingPiece = true;
-
-            if (point.x > -4 && point.x < 4 && point.y > -4 && point.y < 4) {
-                Square rank = (Square)(point.x + 4.0f);
-                Square file = (Square)(point.y + 4.0f);
-
-                // The square the mouse clicked on
-                Square selectedSquare = ToSquare('a' + rank, '1' + file);
-
-                // If a piece was already selected, move piece to clicked square
-                if (m_SelectedPiece != INVALID_SQUARE && m_SelectedPiece != selectedSquare) {
-                    if (m_LegalMoves & (1ull << selectedSquare) || selectedSquare == m_SelectedPiece) {
-                        m_Board->Move({ m_SelectedPiece, selectedSquare });
-                        m_BoardFEN = m_Board->ToFEN();
-                        if (m_RunningEngine)
-                            m_RunningEngine->SetPosition(m_BoardFEN);
-                    }
-
-                    m_SelectedPiece = INVALID_SQUARE;
-                    m_LegalMoves = 0;
-                }
-                else {  // If no piece already selected, select piece
-                    m_LegalMoves = m_Board->GetPieceLegalMoves(selectedSquare);
-                    m_SelectedPiece = m_LegalMoves == 0 ? INVALID_SQUARE : selectedSquare;
-                }
-            }
-            else {
-                m_SelectedPiece = INVALID_SQUARE;
-                m_LegalMoves = 0;
-            }
-        }
-        else { // SDL_EVENT_MOUSE_BUTTON_UP
-            if (point.x > -4 && point.x < 4 && point.y > -4 && point.y < 4) {
-                Square rank = (Square)(point.x + 4.0f);
-                Square file = (Square)(point.y + 4.0f);
-
-                // The square the mouse was released on
-                Square selectedSquare = ToSquare('a' + rank, '1' + file);
-
-                if (m_SelectedPiece != INVALID_SQUARE) {
-                    if (m_LegalMoves & (1ull << selectedSquare)) {
-                        m_Board->Move({ m_SelectedPiece, selectedSquare });
-                        m_BoardFEN = m_Board->ToFEN();
-                        if (m_RunningEngine)
-                            m_RunningEngine->SetPosition(m_BoardFEN);
-                        m_LegalMoves = 0;
-                    }
-                }
-            }
-
-            m_IsHoldingPiece = false;
-            m_SelectedPiece = INVALID_SQUARE;
-        }
-    }
-    else if (event.button == SDL_BUTTON_RIGHT) {
-        m_SelectedPiece = INVALID_SQUARE;
-        m_IsHoldingPiece = false;
-        m_LegalMoves = 0;
-    }
+    // Logic moved to CentralChessboardPanel::Render
 }

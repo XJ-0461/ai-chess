@@ -23,6 +23,17 @@ set(SOURCES
     "src/Application/AgentChat/AgentSidebar.cpp"
     "src/Application/Resources.h"
 
+    src/Application/CentralChessboardPanel.h
+    src/Application/CentralChessboardPanel.cpp
+    src/Application/Layout.hpp
+
+    src/Application/AgentChat/ChatBubble/BaseBubble.h
+    src/Application/AgentChat/ChatBubble/InfoBubble.h
+    src/Application/AgentChat/ChatBubble/MoveBubble.h
+    src/Application/AgentChat/ChatBubble/QuipBubble.h
+    src/Application/AgentChat/ChatBubble/ReasoningBubble.h
+    src/Application/AgentChat/ChatBubble/ResponseBubble.h
+
     "src/Chess/AlgebraicMove.cpp"
     "src/Chess/BitBoard.h"
     "src/Chess/Board.h"
@@ -112,6 +123,7 @@ target_compile_options(
     ${PROJECT_NAME}
     PRIVATE
     "--embed-dir=${CMAKE_CURRENT_BINARY_DIR}/resources/"
+    "--embed-dir=${CMAKE_CURRENT_LIST_DIR}/resources/fonts/pixel_operator/"
 )
 
 ###############

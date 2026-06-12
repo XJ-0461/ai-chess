@@ -18,16 +18,39 @@ static constexpr std::uint8_t kBoardAtlasBytes[] = {
 using BoardUInt8Span = std::span<const std::uint8_t>;
 static constexpr BoardUInt8Span kBoardAtlas{kBoardAtlasBytes, sizeof(kBoardAtlasBytes)};
 
-using BoardColorPaletteT = std::array<RGBA, 4>;
+using BoardColorPaletteT = std::array<RGBA, 3>;
 
 template <typename T>
 concept IsBoardColorPalette = std::same_as<std::remove_cvref_t<T>, BoardColorPaletteT>;
 
-constexpr BoardColorPaletteT kBasicBoardColorPalette {
-    RGBA{ 234, 240, 216, 255 }, // Lightest
-    RGBA{ 150, 162, 179, 255 }, // Light
+constexpr BoardColorPaletteT kStandardBoardColorPalette {
+    RGBA{ 234, 240, 216, 255 }, // Light
     RGBA{ 89,   96, 112, 255 }, // Dark
-    RGBA{ 31,   31,  41,  255 }  // Darkest
+    RGBA{ 150, 162, 179, 255 }  // Accent
+};
+
+constexpr BoardColorPaletteT kCreamBoardColorPalette {
+    RGBA{ 234, 240, 216, 255 },
+    RGBA{ 192, 196, 179, 255 },
+    RGBA{ 234, 240, 216, 255 }
+};
+
+constexpr BoardColorPaletteT kDarkBoardColorPalette {
+    RGBA{ 150, 162, 179, 255 },
+    RGBA{ 89,   96, 112, 255 },
+    RGBA{ 150, 162, 179, 255 }
+};
+
+constexpr BoardColorPaletteT kCreamBlueBoardColorPalette {
+    RGBA{ 230, 234, 215, 255 },
+    RGBA{ 69,   77,  95, 255 },
+    RGBA{ 150, 162, 179, 255 }
+};
+
+constexpr BoardColorPaletteT kWoodBoardColorPalette {
+    RGBA{ 226, 213, 161, 255 },
+    RGBA{ 120,  79,  72, 255 },
+    RGBA{ 226, 213, 161, 255 }
 };
 
 namespace board_detail {
@@ -74,47 +97,39 @@ consteval auto FindPixelsMatchingRGBA(const BoardUInt8Span pixels) {
 
 template <BoardColorPaletteT Palette, const auto& Pixels>
 struct BoardAtlasColorPaletteMask {
-    using LightestT = decltype(board_detail::FindPixelsMatchingRGBA<Palette[0]>(Pixels));
-    using LightT    = decltype(board_detail::FindPixelsMatchingRGBA<Palette[1]>(Pixels));
-    using DarkT     = decltype(board_detail::FindPixelsMatchingRGBA<Palette[2]>(Pixels));
-    using DarkestT  = decltype(board_detail::FindPixelsMatchingRGBA<Palette[3]>(Pixels));
+    using LightT    = decltype(board_detail::FindPixelsMatchingRGBA<Palette[0]>(Pixels));
+    using DarkT     = decltype(board_detail::FindPixelsMatchingRGBA<Palette[1]>(Pixels));
+    using AccentT   = decltype(board_detail::FindPixelsMatchingRGBA<Palette[2]>(Pixels));
 
-    LightestT lightest = board_detail::FindPixelsMatchingRGBA<Palette[0]>(Pixels);
-    LightT    light    = board_detail::FindPixelsMatchingRGBA<Palette[1]>(Pixels);
-    DarkT     dark     = board_detail::FindPixelsMatchingRGBA<Palette[2]>(Pixels);
-    DarkestT  darkest  = board_detail::FindPixelsMatchingRGBA<Palette[3]>(Pixels);
+    LightT    light    = board_detail::FindPixelsMatchingRGBA<Palette[0]>(Pixels);
+    DarkT     dark     = board_detail::FindPixelsMatchingRGBA<Palette[1]>(Pixels);
+    AccentT   accent   = board_detail::FindPixelsMatchingRGBA<Palette[2]>(Pixels);
 };
 
-constexpr BoardAtlasColorPaletteMask<kBasicBoardColorPalette, kBoardAtlas> kBoardAtlasColorPaletteMask{};
+constexpr BoardAtlasColorPaletteMask<kStandardBoardColorPalette, kBoardAtlas> kBoardAtlasColorPaletteMask{};
 
 template <typename BoardAtlasColorPaletteMaskT>
 constexpr auto BoardPaletteSwap(const BoardAtlasColorPaletteMaskT& mask, BoardColorPaletteT palette) {
     std::array<std::uint8_t, kBoardAtlas.size()> atlas_copy{};
     std::ranges::copy(kBoardAtlas.begin(), kBoardAtlas.end(), atlas_copy.begin());
 
-    for (const auto& idx : mask.lightest) {
+    for (const auto& idx : mask.light) {
         atlas_copy.at(idx) = palette[0].red;
         atlas_copy.at(idx + 1) = palette[0].green;
         atlas_copy.at(idx + 2) = palette[0].blue;
         atlas_copy.at(idx + 3) = palette[0].alpha;
     }
-    for (const auto& idx : mask.light) {
+    for (const auto& idx : mask.dark) {
         atlas_copy.at(idx) = palette[1].red;
         atlas_copy.at(idx + 1) = palette[1].green;
         atlas_copy.at(idx + 2) = palette[1].blue;
         atlas_copy.at(idx + 3) = palette[1].alpha;
     }
-    for (const auto& idx : mask.dark) {
+    for (const auto& idx : mask.accent) {
         atlas_copy.at(idx) = palette[2].red;
         atlas_copy.at(idx + 1) = palette[2].green;
         atlas_copy.at(idx + 2) = palette[2].blue;
         atlas_copy.at(idx + 3) = palette[2].alpha;
-    }
-    for (const auto& idx : mask.darkest) {
-        atlas_copy.at(idx) = palette[3].red;
-        atlas_copy.at(idx + 1) = palette[3].green;
-        atlas_copy.at(idx + 2) = palette[3].blue;
-        atlas_copy.at(idx + 3) = palette[3].alpha;
     }
 
     return atlas_copy;
@@ -125,14 +140,14 @@ struct BoardTextureView {
     SDL_FRect region{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
-class PaletteSwappedBoard {
+class PaletteSwappedBoardAtlas {
 public:
     // Adjust dimensions to match Board.rgba (142x142 = 20164 pixels * 4 = 80656 bytes)
     static constexpr std::size_t kBoardWidth = 142;
     static constexpr std::size_t kBoardHeight = 142;
     static constexpr std::size_t kPitch = kBoardWidth * 4;
 
-    PaletteSwappedBoard(
+    PaletteSwappedBoardAtlas(
         const BoardColorPaletteT color_palette,
         std::shared_ptr<SDL_Renderer> renderer
     ) {
@@ -157,14 +172,14 @@ public:
         }
     }
 
-    ~PaletteSwappedBoard() {
+    ~PaletteSwappedBoardAtlas() {
         if (board_texture_) {
             SDL_DestroyTexture(board_texture_);
         }
     }
 
-    PaletteSwappedBoard(const PaletteSwappedBoard&) = delete;
-    PaletteSwappedBoard& operator=(const PaletteSwappedBoard&) = delete;
+    PaletteSwappedBoardAtlas(const PaletteSwappedBoardAtlas&) = delete;
+    PaletteSwappedBoardAtlas& operator=(const PaletteSwappedBoardAtlas&) = delete;
 
     [[nodiscard]] SDL_Texture* GetBoardTexture() const { return board_texture_; }
 
