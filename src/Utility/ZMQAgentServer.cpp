@@ -35,7 +35,7 @@ void ZMQAgentServer::Update() {
     while (m_ReceiveQueue->try_dequeue(msgStr)) {
         try {
             auto j = nlohmann::json::parse(msgStr);
-            std::cout << m_LogTag << " Received Message: " << j.value("type", "unknown") << "\n";
+            // std::cout << m_LogTag << " Received Message: " << j.value("type", "unknown") << "\n";
             HandleMessage(j);
         } catch (const std::exception& e) {
             std::cerr << m_LogTag << " JSON Parse Error: " << e.what() << "\n";
@@ -127,13 +127,13 @@ void ZMQAgentServer::SendBoardStateResponse(const std::string& id, const nlohman
 }
 
 void ZMQAgentServer::SendPing() {
-    std::cout << m_LogTag << " Sending Message: ping\n";
+    // std::cout << m_LogTag << " Sending Message: ping\n";
     nlohmann::json j = {{"type", "ping"}};
     m_Channel->SendMessage(j.dump());
 }
 
 void ZMQAgentServer::SendSetup(const std::string& color) {
-    std::cout << m_LogTag << " Sending Message: setup\n";
+    // std::cout << m_LogTag << " Sending Message: setup\n";
     nlohmann::json j = {{"type", "setup"}, {"color", color}};
     m_Channel->SendMessage(j.dump());
 }
@@ -143,7 +143,7 @@ void ZMQAgentServer::SendMoveRequest(
     const std::vector<std::string>& history,
     const std::vector<std::string>& opponent_quips
 ) {
-    std::cout << m_LogTag << " Sending Message: start_move\n";
+    // std::cout << m_LogTag << " Sending Message: start_move\n";
     nlohmann::json j = {
         {"type", "start_move"},
         {"game_history", history},
@@ -153,25 +153,25 @@ void ZMQAgentServer::SendMoveRequest(
 }
 
 void ZMQAgentServer::SendGameHistory(const std::vector<std::string>& history) {
-    std::cout << m_LogTag << " Sending Message: game_history\n";
+    // std::cout << m_LogTag << " Sending Message: game_history\n";
     nlohmann::json j = {{"type", "game_history"}, {"game_history", history}};
     m_Channel->SendMessage(j.dump());
 }
 
 void ZMQAgentServer::SendErrorRecovery(const std::vector<std::string>& history, const std::vector<std::string>& errors) {
-    std::cout << m_LogTag << " Sending Message: error_recovery\n";
+    // std::cout << m_LogTag << " Sending Message: error_recovery\n";
     nlohmann::json j = {{"type", "error_recovery"}, {"game_history", history}, {"errors", errors}};
     m_Channel->SendMessage(j.dump());
 }
 
 void ZMQAgentServer::SendEndGame(const std::string& winner, const std::string& cause) {
-    std::cout << m_LogTag << " Sending Message: end_game\n";
+    // std::cout << m_LogTag << " Sending Message: end_game\n";
     nlohmann::json j = {{"type", "end_game"}, {"winner", winner}, {"cause", cause}};
     m_Channel->SendMessage(j.dump());
 }
 
 void ZMQAgentServer::SendRetrospectiveRequest(const std::vector<std::string>& history, const std::vector<std::string>& opponent_quips, const std::string& winner, const std::string& cause) {
-    std::cout << m_LogTag << " Sending Message: retrospective_request\n";
+    // std::cout << m_LogTag << " Sending Message: retrospective_request\n";
     nlohmann::json j = {
         {"type", "retrospective_request"},
         {"game_history", history},

@@ -27,6 +27,8 @@ struct TextureResources {
     std::shared_ptr<PaletteSwappedPieceAtlas> white_pieces{};
     std::shared_ptr<PaletteSwappedPieceAtlas> black_pieces{};
     std::shared_ptr<PaletteSwappedBoardAtlas> board{};
+    std::shared_ptr<SDL_Texture> double_check_icon{};
+    std::shared_ptr<SDL_Texture> warning_icon{};
 };
 
 class Application {
@@ -34,6 +36,7 @@ public:
     Application(uint32_t width, uint32_t height, const std::string& name, const ProgramArgs& args);
     Application(const Application&) = delete;
     Application(Application&&) = delete;
+
 
     ~Application();
 
@@ -44,6 +47,7 @@ public:
 
     SDL_Window* GetWindow() const { return m_Window; }
     SDL_Renderer* GetRenderer() const { return m_Renderer.get(); }
+    const TextureResources& GetTextureResources() const { return m_TextureResources; }
 
     void Run();
 
@@ -59,6 +63,8 @@ private:
 
     TextureView GetChessSprite(Piece p);
 
+    static AgentSidebarColorPalette MergeWithPiecePalette(const AgentSidebarColorPalette& current_palette, const PieceColorPaletteT& piece_palette);
+
     void OnWindowClose();
     void OnWindowResize(int32_t width, int32_t height);
     void OnKeyPressed(SDL_Keycode key);
@@ -68,7 +74,6 @@ private:
 
 private:
     static Application* s_Instance;
-
     SDL_Window* m_Window = nullptr;
     std::shared_ptr<SDL_Renderer> m_Renderer = nullptr;
 
@@ -118,4 +123,5 @@ private:
     std::shared_ptr<ZMQAgentServer> m_WhiteAgent;
     std::shared_ptr<ZMQAgentServer> m_BlackAgent;
     ProgramArgs m_Args;
+    AgentSidebarColorPalette m_AgentSidebarColorPalette;
 };

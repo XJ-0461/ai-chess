@@ -11,6 +11,11 @@
 #include "Resources.h"
 #include "Chess/Board.h"
 #include "Graphics/Font/PixelOperatorSCBold.hpp"
+#include "Graphics/Icon/CheckDoubleSVG.hpp"
+#include "Graphics/Icon/WarningSVG.hpp"
+#include "Graphics/SVG/Import.hpp"
+#include "Graphics/Theme/Color/DarkAgentSidebarColorPalette.hpp"
+#include "Graphics/Theme/Color/WoodAgentSidebarColorPalette.hpp"
 
 Application* Application::s_Instance = nullptr;
 
@@ -166,14 +171,41 @@ TextureView Application::GetChessSprite(Piece p) {
     throw std::runtime_error("Invalid Piece enum!");
 }
 
-void Application::UpdatePlayerColorPalette(Colour piece_color, PieceColorPaletteT palette) {
+void Application::UpdatePlayerColorPalette(const Colour piece_color, PieceColorPaletteT palette) {
     if (piece_color == White) {
         m_TextureResources.white_pieces = std::make_shared<PaletteSwappedPieceAtlas>(palette, m_Renderer);
+        m_TextureResources.white_pieces->MakeTexture();
+        m_WhiteSidebar.SetPieceAtlas(m_TextureResources.white_pieces);
+        m_WhiteSidebar.SetColorPalette(
+            MergeWithPiecePalette(m_AgentSidebarColorPalette, palette)
+        );
     } else {
         m_TextureResources.black_pieces = std::make_shared<PaletteSwappedPieceAtlas>(palette, m_Renderer);
+        m_TextureResources.black_pieces->MakeTexture();
+        m_BlackSidebar.SetPieceAtlas(m_TextureResources.black_pieces);
+        m_BlackSidebar.SetColorPalette(
+            MergeWithPiecePalette(m_AgentSidebarColorPalette, palette)
+        );
     }
     m_CentralPanel.SetPieceAtlases(m_TextureResources.white_pieces, m_TextureResources.black_pieces);
 }
+
+AgentSidebarColorPalette Application::MergeWithPiecePalette(
+    const AgentSidebarColorPalette& current_palette,
+    const PieceColorPaletteT& piece_palette
+) {
+    AgentSidebarColorPalette merged = current_palette;
+
+    constexpr auto to_imvec4 = [](const RGBA& rgba) {
+        return ImVec4(rgba.red / 255.0f, rgba.green / 255.0f, rgba.blue / 255.0f, rgba.alpha / 255.0f);
+    };
+
+    merged.profile_background = to_imvec4(piece_palette[0]);
+    merged.profile_border = to_imvec4(piece_palette[1]);
+
+    return merged;
+}
+
 
 void Application::Init() {
     ImGuiIO& io = ImGui::GetIO();
@@ -209,11 +241,29 @@ void Application::Init() {
 
     // Instantiate our palette-swapped resources.
     m_TextureResources.white_pieces = std::make_shared<PaletteSwappedPieceAtlas>(kBasicWhiteColorPalette, m_Renderer);
+    m_TextureResources.white_pieces->MakeTexture();
     m_TextureResources.black_pieces = std::make_shared<PaletteSwappedPieceAtlas>(kBasicBlackColorPalette, m_Renderer);
-    m_TextureResources.board = std::make_shared<PaletteSwappedBoardAtlas>(kCreamBlueBoardColorPalette, m_Renderer);
+    m_TextureResources.black_pieces->MakeTexture();
+    m_TextureResources.board = std::make_shared<PaletteSwappedBoardAtlas>(kWoodBoardColorPalette, m_Renderer);
+    m_AgentSidebarColorPalette = chess::style::color::kWoodAgentSidebarColorPalette;
+
+    m_WhiteSidebar.SetColorPalette(
+        MergeWithPiecePalette(m_AgentSidebarColorPalette, kBasicWhiteColorPalette)
+    );
+    m_BlackSidebar.SetColorPalette(
+        MergeWithPiecePalette(m_AgentSidebarColorPalette, kBasicBlackColorPalette)
+    );
+
+
+    m_WhiteSidebar.SetPieceAtlas(m_TextureResources.white_pieces);
+    m_BlackSidebar.SetPieceAtlas(m_TextureResources.black_pieces);
 
     m_CentralPanel.SetPieceAtlases(m_TextureResources.white_pieces, m_TextureResources.black_pieces);
     m_CentralPanel.SetBoardAtlas(m_TextureResources.board);
+
+    m_TextureResources.double_check_icon = chess::graphics::svg::LoadSVGTextureFromMemory(m_Renderer, kCheckDoubleSvg);
+    m_TextureResources.warning_icon = chess::graphics::svg::LoadSVGTextureFromMemory(m_Renderer, kWarningSvg);
+
     m_CentralPanel.SetGameState(m_Board, m_BoardMutex);
     m_CentralPanel.SetInteractionState(&m_SelectedPiece, &m_LegalMoves, &m_IsHoldingPiece);
 
@@ -252,33 +302,33 @@ void Application::Init() {
 void Application::RenderImGui() {
     static bool s_ShowSettingsWindow = false, s_ShowFENWindow = false, s_ShowEngineWindow = false;
 
-    if (ImGui::BeginMainMenuBar()) {
-        if (ImGui::BeginMenu("File")) {
-            ImGui::MenuItem("New");
-            ImGui::Separator();
-            if (ImGui::MenuItem("Quit")) {
-                m_Running = false;
-            }
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("View")) {
-            if (ImGui::MenuItem("Colours")) {
-                s_ShowSettingsWindow = true;
-            }
-            if (ImGui::MenuItem("FEN")) {
-                s_ShowFENWindow     = true;
-            }
-            if (ImGui::MenuItem("Engine")) {
-                s_ShowEngineWindow  = true;
-            }
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("About")) {
-            ImGui::Text("SDL3 Backend");
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
-    }
+    // if (ImGui::BeginMainMenuBar()) {
+    //     if (ImGui::BeginMenu("File")) {
+    //         ImGui::MenuItem("New");
+    //         ImGui::Separator();
+    //         if (ImGui::MenuItem("Quit")) {
+    //             m_Running = false;
+    //         }
+    //         ImGui::EndMenu();
+    //     }
+    //     if (ImGui::BeginMenu("View")) {
+    //         if (ImGui::MenuItem("Colours")) {
+    //             s_ShowSettingsWindow = true;
+    //         }
+    //         if (ImGui::MenuItem("FEN")) {
+    //             s_ShowFENWindow     = true;
+    //         }
+    //         if (ImGui::MenuItem("Engine")) {
+    //             s_ShowEngineWindow  = true;
+    //         }
+    //         ImGui::EndMenu();
+    //     }
+    //     if (ImGui::BeginMenu("About")) {
+    //         ImGui::Text("SDL3 Backend");
+    //         ImGui::EndMenu();
+    //     }
+    //     ImGui::EndMainMenuBar();
+    // }
 
     m_Layout.Render();
 

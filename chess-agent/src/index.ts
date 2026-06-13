@@ -43,7 +43,7 @@ async function main() {
   process.on("SIGTERM", () => shutdown(0));
 
   const safeSend = async (msg: any) => {
-    console.log(`[ChessAgent(${myColor || agentName})] Sending Message: ${msg.type}`);
+    // console.log(`[ChessAgent(${myColor || agentName})] Sending Message: ${msg.type}`);
     await zmqClient.send(msg);
   };
 
@@ -88,7 +88,7 @@ async function main() {
         continue;
       }
 
-      console.log(`[ChessAgent(${myColor || agentName})] Received Message: ${message.type}`);
+      // console.log(`[ChessAgent(${myColor || agentName})] Received Message: ${message.type}`);
 
       switch (message.type.toLowerCase()) {
         case "ping":

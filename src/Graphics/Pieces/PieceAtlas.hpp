@@ -371,9 +371,20 @@ public:
     PaletteSwappedPieceAtlas(
         const PieceColorPaletteT color_palette,
         std::shared_ptr<SDL_Renderer> renderer
-    ) {
+    ) : color_palette_(std::move(color_palette)),
+        renderer_(std::move(renderer)) {}
 
-        const auto swapped_pixels = PaletteSwap(kPieceAtlasColorPaletteMask, color_palette);
+    ~PaletteSwappedPieceAtlas() {
+        if (atlas_texture_) {
+            SDL_DestroyTexture(atlas_texture_);
+        }
+    }
+
+    PaletteSwappedPieceAtlas(const PaletteSwappedPieceAtlas&) = delete;
+    PaletteSwappedPieceAtlas& operator=(const PaletteSwappedPieceAtlas&) = delete;
+
+    void MakeTexture() {
+        const auto swapped_pixels = PaletteSwap(kPieceAtlasColorPaletteMask, color_palette_);
         SDL_Surface* surface = SDL_CreateSurfaceFrom(
             kTotalWidth,
             kPieceHeight,
@@ -386,49 +397,48 @@ public:
             throw std::runtime_error("Failed to create texture");
         }
 
-        atlas_texture_ = SDL_CreateTextureFromSurface(renderer.get(), surface);
+        atlas_texture_ = SDL_CreateTextureFromSurface(renderer_.get(), surface);
         SDL_DestroySurface(surface);
 
         if (!atlas_texture_) {
             throw std::runtime_error("Failed to create SDL_Texture from palette-swapped surface.");
         }
-
     }
-
-    ~PaletteSwappedPieceAtlas() {
-        if (atlas_texture_) {
-            SDL_DestroyTexture(atlas_texture_);
-        }
-    }
-
-    PaletteSwappedPieceAtlas(const PaletteSwappedPieceAtlas&) = delete;
-    PaletteSwappedPieceAtlas& operator=(const PaletteSwappedPieceAtlas&) = delete;
 
     // Direct access to the raw texture resource
     [[nodiscard]] SDL_Texture* GetAtlasTexture() const { return atlas_texture_; }
+
+    [[nodiscard]] PieceColorPaletteT GetColorPalette() const { return color_palette_; }
 
     // --- Piece Accessors returning exact SDL3 source clip region coordinates ---
     [[nodiscard]] TextureView GetPawnTexture() const { 
         return TextureView{ atlas_texture_, SDL_FRect{ 0.0f, 0.0f, 16.0f, 16.0f } }; 
     }
+
     [[nodiscard]] TextureView GetKnightTexture() const { 
         return TextureView{ atlas_texture_, SDL_FRect{ 16.0f, 0.0f, 16.0f, 16.0f } }; 
     }
+
     [[nodiscard]] TextureView GetRookTexture() const { 
         return TextureView{ atlas_texture_, SDL_FRect{ 32.0f, 0.0f, 16.0f, 16.0f } }; 
     }
+
     [[nodiscard]] TextureView GetBishopTexture() const { 
         return TextureView{ atlas_texture_, SDL_FRect{ 48.0f, 0.0f, 16.0f, 16.0f } }; 
     }
+
     [[nodiscard]] TextureView GetQueenTexture() const { 
         return TextureView{ atlas_texture_, SDL_FRect{ 64.0f, 0.0f, 16.0f, 16.0f } }; 
     }
+
     [[nodiscard]] TextureView GetKingTexture() const { 
         return TextureView{ atlas_texture_, SDL_FRect{ 80.0f, 0.0f, 16.0f, 16.0f } }; 
     }
 
 private:
 
+    PieceColorPaletteT color_palette_{};
+    std::shared_ptr<SDL_Renderer> renderer_{nullptr};
     SDL_Texture* atlas_texture_{nullptr};
 
 };

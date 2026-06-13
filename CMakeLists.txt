@@ -70,7 +70,18 @@ set(SOURCES
 
     src/Graphics/RGBA.hpp
     src/Graphics/Board/BoardAtlas.hpp
-    "src/Graphics/Pieces/PieceAtlas.hpp"
+    src/Graphics/Pieces/PieceAtlas.hpp
+    src/Graphics/Icon/CheckDoubleSVG.hpp
+    src/Graphics/Icon/WarningSVG.hpp
+    src/Graphics/SVG/Import.hpp
+
+    src/Graphics/Theme/AgentSidebarColorPalette.hpp
+
+    src/Graphics/Theme/Color/CreamBlueAgentSidebarColorPalette.hpp
+    src/Graphics/Theme/Color/CreamAgentSidebarColorPalette.hpp
+    src/Graphics/Theme/Color/DarkAgentSidebarColorPalette.hpp
+    src/Graphics/Theme/Color/StandardAgentSidebarColorPalette.hpp
+    src/Graphics/Theme/Color/WoodAgentSidebarColorPalette.hpp
 
     "src/Utility/FileDialog.h"
     "src/Utility/StringParser.h"
@@ -81,6 +92,7 @@ set(SOURCES
     "src/Utility/GameOrchestrator.h"
     "src/Utility/ZMQAgentServer.h"
     "src/Utility/ZMQPairChannel.hpp"
+    src/Utility/SDL3_STD.hpp
 )
 
 if (WIN32)
@@ -124,6 +136,7 @@ target_compile_options(
     PRIVATE
     "--embed-dir=${CMAKE_CURRENT_BINARY_DIR}/resources/"
     "--embed-dir=${CMAKE_CURRENT_LIST_DIR}/resources/fonts/pixel_operator/"
+    "--embed-dir=${CMAKE_CURRENT_LIST_DIR}/resources/textures/"
 )
 
 ###############
@@ -163,6 +176,7 @@ cool_vcpkg_DeclarePackage(NAME nlohmann-json)
 cool_vcpkg_DeclarePackage(NAME cppzmq)
 cool_vcpkg_DeclarePackage(NAME concurrentqueue)
 cool_vcpkg_DeclarePackage(NAME sdl3 VERSION "3.4.10#1")
+cool_vcpkg_DeclarePackage(NAME sdl3-image VERSION "3.4.4#0")
 cool_vcpkg_DeclarePackage(NAME imgui VERSION "1.92.8#0" FEATURES sdl3-binding sdl3-renderer-binding sdlgpu3-binding)
 
 cool_vcpkg_InstallPackages()
@@ -171,6 +185,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(cppzmq CONFIG REQUIRED)
 find_package(concurrentqueue CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
+find_package(SDL3_image CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 
 function(Chess_GenerateAtlas)
@@ -303,6 +318,7 @@ target_link_libraries(
     cppzmq-static
     concurrentqueue::concurrentqueue
     SDL3::SDL3
+    SDL3_image::SDL3_image-static
 )
 
 #set_target_properties(glfw update_mappings glad imgui PROPERTIES FOLDER "DEPENDENCIES/")
