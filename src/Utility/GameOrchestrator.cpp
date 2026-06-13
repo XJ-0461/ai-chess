@@ -45,8 +45,8 @@ void GameOrchestrator::OrchestratorLoop(std::stop_token st) {
                     static auto lastPing = std::chrono::steady_clock::now();
                     static bool first = true;
                     if (first || std::chrono::steady_clock::now() - lastPing > std::chrono::milliseconds(1000)) {
-                        m_WhiteAgent->SendPing();
-                        m_BlackAgent->SendPing();
+                        m_WhiteAgent->Send(chess::agent::message::Ping{});
+                        m_BlackAgent->Send(chess::agent::message::Ping{});
                         lastPing = std::chrono::steady_clock::now();
                         first = false;
                     }
@@ -62,15 +62,15 @@ void GameOrchestrator::OrchestratorLoop(std::stop_token st) {
                 if (m_WhiteAgent && m_BlackAgent) {
                     static bool setupSent = false;
                     if (!setupSent) {
-                        m_WhiteAgent->SendSetup("WHITE");
-                        m_BlackAgent->SendSetup("BLACK");
+                        m_WhiteAgent->Send(chess::agent::message::SetupRequest{.color = "WHITE"});
+                        m_BlackAgent->Send(chess::agent::message::SetupRequest{.color = "BLACK"});
                         setupSent = true;
                     }
                     
                     if (m_WhiteAgent->IsSetupAckReceived() && m_BlackAgent->IsSetupAckReceived()) {
                         std::cout << "[GameOrchestrator] Both agents ready. Starting game.\n";
                         m_State = MatchState::WhiteTurn;
-                        m_WhiteAgent->SendMoveRequest({}, {});
+                        m_WhiteAgent->Send(chess::agent::message::StartMoveRequest{.game_history = {}, .opponent_quips = {}});
                     }
                 }
                 break;
@@ -139,7 +139,7 @@ void GameOrchestrator::HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, s
             responseData["white_state"]["active_pieces"] = whitePieces;
             responseData["black_state"]["active_pieces"] = blackPieces;
         }
-        activeAgent->SendBoardStateResponse(reqOpt->id, responseData);
+        activeAgent->Send(chess::agent::message::GetBoardStateResponse{.id = reqOpt->id, .data = responseData});
     }
 
     auto moveOpt = activeAgent->PopMoveDecision();
@@ -210,11 +210,16 @@ void GameOrchestrator::HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, s
                             initial_quips.push_back(q);
                         }
                     }
-                    opponentAgent->SendRetrospectiveRequest(m_GameHistory, initial_quips, m_Winner, m_EndCause);
+                    opponentAgent->Send(chess::agent::message::RetrospectiveRequest{
+                        .game_history = m_GameHistory,
+                        .opponent_quips = initial_quips,
+                        .winner = m_Winner,
+                        .cause = m_EndCause
+                    });
                 } else {
                     m_State = MatchState::GameOver;
-                    m_WhiteAgent->SendEndGame(m_Winner, m_EndCause);
-                    m_BlackAgent->SendEndGame(m_Winner, m_EndCause);
+                    m_WhiteAgent->Send(chess::agent::message::GameEnd{.winner = m_Winner, .cause = m_EndCause});
+                    m_BlackAgent->Send(chess::agent::message::GameEnd{.winner = m_Winner, .cause = m_EndCause});
                 }
             } else {
                 m_State = nextState;
@@ -232,19 +237,19 @@ void GameOrchestrator::HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, s
                     const std::size_t dequeued_count = quips_queue->try_dequeue_bulk(new_quips.data(), estimated_queue_size);
                     new_quips.resize(dequeued_count);
                 }
-                opponentAgent->SendMoveRequest(m_GameHistory, new_quips); // change to SendMoveRequest
+                opponentAgent->Send(chess::agent::message::StartMoveRequest{.game_history = m_GameHistory, .opponent_quips = new_quips});
             }
         } catch (const IllegalMoveException& e) {
             std::cerr << "[GameOrchestrator] Illegal move rejected: " << moveStr << " (" << e.what() << ")\n";
             activeAgent->GetTrajectory()->SetMoveVerificationError(moveStr, std::string("Illegal move: ") + e.what());
-            activeAgent->SendErrorRecovery(m_GameHistory, {e.what()});
+            activeAgent->Send(chess::agent::message::ErrorRecoveryRequest{.game_history = m_GameHistory, .errors = {e.what()}});
         } catch (const InvalidAlgebraicMoveException& e) {
             std::cerr << "[GameOrchestrator] Invalid move rejected: " << moveStr << " (" << e.what() << ")\n";
             activeAgent->GetTrajectory()->SetMoveVerificationError(moveStr, std::string("Invalid move: ") + e.what());
-            activeAgent->SendErrorRecovery(m_GameHistory, {e.what()});
+            activeAgent->Send(chess::agent::message::ErrorRecoveryRequest{.game_history = m_GameHistory, .errors = {e.what()}});
         } catch (const std::exception& e) {
             std::cerr << "[GameOrchestrator] Fatal error during move: " << moveStr << " (" << e.what() << ")\n";
-            activeAgent->GetTrajectory()->AddEvent("error", std::string("Fatal error: ") + e.what());
+            activeAgent->GetTrajectory()->AddEvent(chess::agent::InfoEvent{.message = std::string("Fatal error: ") + e.what(), .isError = true});
             std::abort();
         }
     } else {
@@ -253,7 +258,7 @@ void GameOrchestrator::HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, s
             std::string errMsg = *errorOpt;
             if (errMsg.find("did not submit a move decision") != std::string::npos) {
                 std::cerr << "[GameOrchestrator] Recoverable error from agent: " << errMsg << "\n";
-                activeAgent->SendErrorRecovery(m_GameHistory, {errMsg});
+                activeAgent->Send(chess::agent::message::ErrorRecoveryRequest{.game_history = m_GameHistory, .errors = {errMsg}});
             } else {
                 std::cerr << "[GameOrchestrator] Fatal error from agent: " << errMsg << "\n";
                 std::abort();
@@ -269,8 +274,8 @@ void GameOrchestrator::HandleRetrospective(std::shared_ptr<ZMQAgentServer> activ
             m_CurrentRetrospectiveRound++;
             if (m_CurrentRetrospectiveRound >= m_RetrospectiveRounds) {
                 m_State = MatchState::GameOver;
-                m_WhiteAgent->SendEndGame(m_Winner, m_EndCause);
-                m_BlackAgent->SendEndGame(m_Winner, m_EndCause);
+                m_WhiteAgent->Send(chess::agent::message::GameEnd{.winner = m_Winner, .cause = m_EndCause});
+                m_BlackAgent->Send(chess::agent::message::GameEnd{.winner = m_Winner, .cause = m_EndCause});
                 return;
             }
         }
@@ -284,6 +289,11 @@ void GameOrchestrator::HandleRetrospective(std::shared_ptr<ZMQAgentServer> activ
             std::string q;
             while (q_queue->try_dequeue(q)) next_quips.push_back(q);
         }
-        opponentAgent->SendRetrospectiveRequest(m_GameHistory, next_quips, m_Winner, m_EndCause);
+        opponentAgent->Send(chess::agent::message::RetrospectiveRequest{
+            .game_history = m_GameHistory,
+            .opponent_quips = next_quips,
+            .winner = m_Winner,
+            .cause = m_EndCause
+        });
     }
 }

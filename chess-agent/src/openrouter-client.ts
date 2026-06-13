@@ -12,11 +12,23 @@ export class OpenRouterClient {
   private conversationStore = new Map<string, ConversationState>();
   private conversationId = "chess-match";
   private response_id = 0;
+  private lastRequestTime = 0;
 
   constructor(apiKey: string, modelName: string) {
     // NOTE: Pattern from create-headless-agent/sample/src/agent.ts (line 27)
     this.client = new OpenRouter({ apiKey });
     this.modelName = modelName;
+  }
+
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLast = now - this.lastRequestTime;
+    if (timeSinceLast < 2000) {
+      const delay = 2000 - timeSinceLast;
+      console.log(`[OpenRouter] Rate limiting: waiting ${delay}ms before next request...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    this.lastRequestTime = Date.now();
   }
 
   private get stateAccessor() {
@@ -144,19 +156,25 @@ Please explain your reasoning and strategy, then make your next move by calling 
           const reason_id = `${this.conversationId}-${this.response_id}-reasoning`;
           const move_id = `${this.conversationId}-${this.response_id}-move`;
 
+          await this.enforceRateLimit();
           // NOTE: Pattern from create-headless-agent/sample/src/agent.ts (runAgent function, callModel configuration)
-          const result = this.client.callModel({
-            model: this.modelName,
-            instructions: systemPrompt,
-            input: [{ role: "user", content: userPrompt }],
-            tools: [makeMoveTool, quipTool, fetchBoardStateTool],
-            state: this.stateAccessor,
-            reasoning: { enabled: true },
-            // NOTE: hasToolCall stop condition is described in create-headless-agent/SKILL.md (What @openrouter/agent handles section)
-            stopWhen: [
-              hasToolCall("make_move")
-            ]
-          });
+          // const timeout_signal = AbortSignal.timeout(10000); // 10 second timeout
+          const result =
+              this.client.callModel(
+                {
+                  model: this.modelName,
+                  instructions: systemPrompt,
+                  input: [{ role: "user", content: userPrompt }],
+                  tools: [makeMoveTool, quipTool, fetchBoardStateTool],
+                  state: this.stateAccessor,
+                  reasoning: { enabled: true },
+                  // NOTE: hasToolCall stop condition is described in create-headless-agent/SKILL.md (What @openrouter/agent handles section)
+                  stopWhen: [
+                    hasToolCall("make_move")
+                  ]
+                },
+                // { signal: timeout_signal }
+            );
 
           let accumulatedText = "";
           let accumulatedReasoning = "";
@@ -303,6 +321,7 @@ Please analyze the game and provide your retrospective quips, then call \`end_tu
       const res_id = `${this.conversationId}-${this.response_id}-retrospective-response`;
       const reason_id = `${this.conversationId}-${this.response_id}-retrospective-reasoning`;
 
+      await this.enforceRateLimit();
       const result = this.client.callModel({
         model: this.modelName,
         instructions: systemPrompt,

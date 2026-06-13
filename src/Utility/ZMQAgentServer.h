@@ -11,6 +11,11 @@
 #include <mutex>
 #include "ZMQPairChannel.hpp"
 
+#include "Application/AgentChat/Message/Handshake.hpp"
+#include "Application/AgentChat/Message/GameFlow.hpp"
+#include "Application/AgentChat/Message/Utility.hpp"
+#include "Application/AgentChat/Message/BoardState.hpp"
+
 class ZMQAgentServer {
 public:
     ZMQAgentServer(const std::string& endpoint, const std::string& color);
@@ -20,25 +25,22 @@ public:
     void Stop();
     void Update(); // Called periodically to process incoming messages
 
-    void SendPing();
-    void SendSetup(const std::string& color);
-    void SendMoveRequest(const std::vector<std::string>& history, const std::vector<std::string>& opponent_quips);
-    void SendGameHistory(const std::vector<std::string>& history);
-    void SendErrorRecovery(const std::vector<std::string>& history, const std::vector<std::string>& errors);
-    void SendEndGame(const std::string& winner, const std::string& cause);
-    void SendRetrospectiveRequest(const std::vector<std::string>& history, const std::vector<std::string>& opponent_quips, const std::string& winner, const std::string& cause);
+    void Send(const chess::agent::message::Ping& m);
+    void Send(const chess::agent::message::SetupRequest& m);
+    void Send(const chess::agent::message::StartMoveRequest& m);
+    void Send(const chess::agent::message::GameHistory& m);
+    void Send(const chess::agent::message::ErrorRecoveryRequest& m);
+    void Send(const chess::agent::message::GameEnd& m);
+    void Send(const chess::agent::message::RetrospectiveRequest& m);
+    void Send(const chess::agent::message::GetBoardStateResponse& m);
 
     std::shared_ptr<AgentTrajectory> GetTrajectory() const { return m_Trajectory; }
     
     std::optional<std::string> PopMoveDecision();
     std::optional<std::string> PopError();
 
-    struct EndTurnRequest { std::string id; };
-    std::optional<EndTurnRequest> PopEndTurn();
-
-    struct BoardStateRequest { std::string id; };
-    std::optional<BoardStateRequest> PopBoardStateRequest();
-    void SendBoardStateResponse(const std::string& id, const nlohmann::json& data);
+    std::optional<chess::agent::message::EndTurnRequest> PopEndTurn();
+    std::optional<chess::agent::message::GetBoardStateRequest> PopBoardStateRequest();
 
     bool IsSetupAckReceived() const { return m_SetupAckReceived; }
     bool IsPongReceived() const { return m_PongReceived; }
@@ -67,10 +69,10 @@ private:
     std::queue<std::string> m_Errors;
     std::mutex m_ErrorsMtx;
 
-    std::queue<BoardStateRequest> m_BoardStateRequests;
+    std::queue<chess::agent::message::GetBoardStateRequest> m_BoardStateRequests;
     std::mutex m_BoardStateRequestsMtx;
 
-    std::queue<EndTurnRequest> m_EndTurnRequests;
+    std::queue<chess::agent::message::EndTurnRequest> m_EndTurnRequests;
     std::mutex m_EndTurnRequestsMtx;
 
     std::shared_ptr<moodycamel::ConcurrentQueue<std::string>> m_Quips{std::make_shared<moodycamel::ConcurrentQueue<std::string>>()};

@@ -34,6 +34,11 @@ set(SOURCES
     src/Application/AgentChat/ChatBubble/ReasoningBubble.h
     src/Application/AgentChat/ChatBubble/ResponseBubble.h
 
+    src/Application/AgentChat/Message/BoardState.hpp
+    src/Application/AgentChat/Message/GameFlow.hpp
+    src/Application/AgentChat/Message/Handshake.hpp
+    src/Application/AgentChat/Message/Utility.hpp
+
     "src/Chess/AlgebraicMove.cpp"
     "src/Chess/BitBoard.h"
     "src/Chess/Board.h"

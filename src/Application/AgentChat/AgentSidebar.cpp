@@ -131,23 +131,55 @@ void AgentSidebar::Render() {
             const auto& resources = Application::Get().GetTextureResources();
             {
                 std::lock_guard<std::mutex> lock(m_Trajectory->mtx);
-                for (const auto& ev : m_Trajectory->events) {
-                    if (ev.type == "reasoning") {
-                        ReasoningBubble(ev.message).Render(m_ColorPalette.reasoning_chat_border, m_ColorPalette.reasoning_chat_background, m_ColorPalette.reasoning_chat_text, m_HeaderFont);
-                    } else if (ev.type == "response") {
-                        ResponseBubble(ev.message).Render(m_ColorPalette.response_chat_border, m_ColorPalette.response_chat_background, m_ColorPalette.response_chat_text, m_HeaderFont);
-                    } else if (ev.type == "quip") {
-                        QuipBubble(ev.message).Render(m_ColorPalette.quip_chat_border, m_ColorPalette.quip_chat_background, m_ColorPalette.quip_chat_text, m_HeaderFont);
-                    } else if (ev.type == "move") {
-                        std::shared_ptr<SDL_Texture> icon = nullptr;
-                        if (ev.verificationState == MoveVerificationState::Verified) icon = resources.double_check_icon;
-                        if (ev.verificationState == MoveVerificationState::Error)    icon = resources.warning_icon;
-                        MoveBubble(ev.message, ev.verificationState, ev.errorMessage).Render(m_ColorPalette.move_chat_border, m_ColorPalette.move_chat_background, m_ColorPalette.move_chat_text, m_HeaderFont, icon);
-                    } else if (ev.type == "error") {
-                        InfoBubble(ev.message, true).Render(m_ColorPalette.error_chat_border, m_ColorPalette.error_chat_background, m_ColorPalette.error_chat_text, m_HeaderFont, resources.warning_icon);
-                    } else {
-                        InfoBubble(ev.message).Render(m_ColorPalette.info_chat_border, m_ColorPalette.info_chat_background, m_ColorPalette.info_chat_text, m_HeaderFont);
+                
+                struct ChatEventVisitor {
+                    const AgentSidebarColorPalette& palette;
+                    ImFont* headerFont;
+                    const TextureResources& resources;
+
+                    void operator()(const chess::agent::InfoEvent& ev) const {
+                        InfoBubble(ev.message, ev.isError)
+                            .Render(ev.isError ? palette.error_chat_border : palette.info_chat_border,
+                                    ev.isError ? palette.error_chat_background : palette.info_chat_background,
+                                    ev.isError ? palette.error_chat_text : palette.info_chat_text,
+                                    headerFont, ev.isError ? resources.warning_icon : nullptr);
                     }
+
+                    void operator()(const chess::agent::message::ReasoningSnapshot& ev) const {
+                        ReasoningBubble(ev.message)
+                            .Render(palette.reasoning_chat_border, palette.reasoning_chat_background, palette.reasoning_chat_text, headerFont);
+                    }
+
+                    void operator()(const chess::agent::message::ResponseSnapshot& ev) const {
+                        ResponseBubble(ev.message)
+                            .Render(palette.response_chat_border, palette.response_chat_background, palette.response_chat_text, headerFont);
+                    }
+
+                    void operator()(const chess::agent::message::QuipResponse& ev) const {
+                        QuipBubble(ev.message)
+                            .Render(palette.quip_chat_border, palette.quip_chat_background, palette.quip_chat_text, headerFont);
+                    }
+
+                    void operator()(const chess::agent::MoveEvent& ev) const {
+                        std::shared_ptr<SDL_Texture> icon = nullptr;
+                        if (ev.verificationState == MoveVerificationState::Verified) {
+                            icon = resources.double_check_icon;
+                        } else if (ev.verificationState == MoveVerificationState::Error) {
+                            icon = resources.warning_icon;
+                        }
+                        MoveBubble(ev.response.algebraic_move_string, ev.verificationState, ev.errorMessage)
+                            .Render(palette.move_chat_border, palette.move_chat_background, palette.move_chat_text, headerFont, icon);
+                    }
+
+                    void operator()(const chess::agent::message::ErrorResponse& ev) const {
+                        InfoBubble(ev.message, true)
+                            .Render(palette.error_chat_border, palette.error_chat_background, palette.error_chat_text, headerFont, resources.warning_icon);
+                    }
+                };
+
+                ChatEventVisitor visitor{m_ColorPalette, m_HeaderFont, resources};
+                for (const auto& ev : m_Trajectory->events) {
+                    std::visit(visitor, ev);
                 }
             }
 
