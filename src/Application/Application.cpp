@@ -53,6 +53,7 @@ Application::Application(uint32_t width, uint32_t height, const std::string& nam
         return;
     }
     m_Renderer = std::shared_ptr<SDL_Renderer>(renderer, SDL_DestroyRenderer);
+    SDL_SetRenderVSync(m_Renderer.get(), 1);
 
     // Setup ImGui context
     IMGUI_CHECKVERSION();
