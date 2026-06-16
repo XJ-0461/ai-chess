@@ -9,6 +9,8 @@
 
 #include "Application.h"
 #include "Resources.h"
+#include "ConfigureGameWindow.h"
+#include "GameBrowserWindow.h"
 #include "Chess/Board.h"
 #include "Graphics/Font/PixelOperatorSCBold.hpp"
 #include "Graphics/Icon/CheckDoubleSVG.hpp"
@@ -29,6 +31,8 @@ Application::Application(uint32_t width, uint32_t height, const std::string& nam
     if (!s_Instance) {
         s_Instance = this;
     }
+
+    m_Layout.on_toggle_menu_bar = [this]() { ToggleMainMenuBar(); };
 
     // SDL_Init replaces glfwInit. Required to initialize the video subsystem.
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -58,6 +62,11 @@ Application::Application(uint32_t width, uint32_t height, const std::string& nam
     // Setup ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    io.IniFilename = "resources/default_imgui_ini.ini";
 
     // Setup Platform/Renderer backends. We use SDL3 + SDL_Renderer backends.
     ImGui_ImplSDL3_InitForSDLRenderer(m_Window, m_Renderer.get());
@@ -140,6 +149,11 @@ void Application::Run() {
 
         ImGui::Render();
 
+        if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+        }
+
         // Clear with background colour and render ImGui draw data.
         SDL_SetRenderDrawColor(m_Renderer.get(), m_BackgroundColour.r, m_BackgroundColour.g, m_BackgroundColour.b, m_BackgroundColour.a);
         SDL_RenderClear(m_Renderer.get());
@@ -218,15 +232,16 @@ void Application::Init() {
     fontConfig.FontDataOwnedByAtlas = false;
 
     void* font = (void*)Resources::Fonts::Roboto::ROBOTO_REGULAR;
-    int32_t fontSize = sizeof(Resources::Fonts::Roboto::ROBOTO_REGULAR);
+    std::int32_t fontSize = sizeof(Resources::Fonts::Roboto::ROBOTO_REGULAR);
     io.FontDefault = io.Fonts->AddFontFromMemoryTTF(font, fontSize, 20.0f, &fontConfig);
 
     m_HeaderFont = io.Fonts->AddFontFromMemoryTTF((void*)kPixelOperatorSCBoldTFFBytes, sizeof(kPixelOperatorSCBoldTFFBytes), 24.0f, &fontConfig);
     m_WhiteSidebar.SetHeaderFont(m_HeaderFont);
     m_BlackSidebar.SetHeaderFont(m_HeaderFont);
 
-    if (!std::filesystem::exists("imgui.ini"))
+    if (!std::filesystem::exists("imgui.ini")) {
         ImGui::LoadIniSettingsFromMemory(Resources::DEFAULT_IMGUI_INI);
+    }
 
     ImGui::StyleColorsDark();
 
@@ -255,7 +270,6 @@ void Application::Init() {
         MergeWithPiecePalette(m_AgentSidebarColorPalette, kBasicBlackColorPalette)
     );
 
-
     m_WhiteSidebar.SetPieceAtlas(m_TextureResources.white_pieces);
     m_BlackSidebar.SetPieceAtlas(m_TextureResources.black_pieces);
 
@@ -276,62 +290,76 @@ void Application::Init() {
     // Create the target texture for the chess board viewport.
     m_BoardTargetTexture = SDL_CreateTexture(m_Renderer.get(), SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, m_WindowProperties.Width, m_WindowProperties.Height);
 
-    if (!m_Args.whiteEndpoint.empty()) {
-        m_WhiteAgent = std::make_shared<ZMQAgentServer>(m_Args.whiteEndpoint, "WHITE");
-        m_WhiteAgent->Start();
-        m_WhiteSidebar.SetTrajectory(m_WhiteAgent->GetTrajectory());
-        m_WhiteAgent->GetTrajectory()->SetOnModelUpdateCallback([this](const std::string& name) {
-            m_WhiteModelName = name;
-            m_WhitePaletteNeedsUpdate = true;
-        });
-    }
+    m_GameOrchestrationEnvironment = std::make_shared<so_5::wrapped_env_t>();
 
-    if (!m_Args.blackEndpoint.empty()) {
-        m_BlackAgent = std::make_shared<ZMQAgentServer>(m_Args.blackEndpoint, "BLACK");
-        m_BlackAgent->Start();
-        m_BlackSidebar.SetTrajectory(m_BlackAgent->GetTrajectory());
-        m_BlackAgent->GetTrajectory()->SetOnModelUpdateCallback([this](const std::string& name) {
-            m_BlackModelName = name;
-            m_BlackPaletteNeedsUpdate = true;
-        });
-    }
+    // if (!m_Args.whiteEndpoint.empty()) {
+    //     m_WhiteAgent = std::make_shared<ZMQAgentServer>(m_Args.whiteEndpoint, "WHITE");
+    //     m_WhiteAgent->Start();
+    //     m_WhiteSidebar.SetTrajectory(m_WhiteAgent->GetTrajectory());
+    //     m_WhiteAgent->GetTrajectory()->SetOnModelUpdateCallback([this](const std::string& name) {
+    //         m_WhiteModelName = name;
+    //         m_WhitePaletteNeedsUpdate = true;
+    //     });
+    // }
 
-    m_Orchestrator = std::make_shared<GameOrchestrator>(m_WhiteAgent, m_BlackAgent, m_Board, m_BoardMutex, m_Args.retrospectiveRounds);
-    m_Orchestrator->Start();
+    // if (!m_Args.blackEndpoint.empty()) {
+    //     m_BlackAgent = std::make_shared<ZMQAgentServer>(m_Args.blackEndpoint, "BLACK");
+    //     m_BlackAgent->Start();
+    //     m_BlackSidebar.SetTrajectory(m_BlackAgent->GetTrajectory());
+    //     m_BlackAgent->GetTrajectory()->SetOnModelUpdateCallback([this](const std::string& name) {
+    //         m_BlackModelName = name;
+    //         m_BlackPaletteNeedsUpdate = true;
+    //     });
+    // }
+
+    // m_Orchestrator = std::make_shared<GameOrchestrator>(m_WhiteAgent, m_BlackAgent, m_Board, m_BoardMutex, m_Args.retrospectiveRounds);
+    // m_Orchestrator->Start();
 }
 
 void Application::RenderImGui() {
     static bool s_ShowSettingsWindow = false, s_ShowFENWindow = false, s_ShowEngineWindow = false;
+    static bool s_ShowConfigureGameWindow = false, s_ShowGameBrowserWindow = false;
+    static chess::game::GameConfiguration s_NewGameConfig{};
 
-    // if (ImGui::BeginMainMenuBar()) {
-    //     if (ImGui::BeginMenu("File")) {
-    //         ImGui::MenuItem("New");
-    //         ImGui::Separator();
-    //         if (ImGui::MenuItem("Quit")) {
-    //             m_Running = false;
-    //         }
-    //         ImGui::EndMenu();
-    //     }
-    //     if (ImGui::BeginMenu("View")) {
-    //         if (ImGui::MenuItem("Colours")) {
-    //             s_ShowSettingsWindow = true;
-    //         }
-    //         if (ImGui::MenuItem("FEN")) {
-    //             s_ShowFENWindow     = true;
-    //         }
-    //         if (ImGui::MenuItem("Engine")) {
-    //             s_ShowEngineWindow  = true;
-    //         }
-    //         ImGui::EndMenu();
-    //     }
-    //     if (ImGui::BeginMenu("About")) {
-    //         ImGui::Text("SDL3 Backend");
-    //         ImGui::EndMenu();
-    //     }
-    //     ImGui::EndMainMenuBar();
-    // }
+    if (m_ShowMainMenuBar && ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("New", "Configure New Game..")) {
+                s_ShowConfigureGameWindow = true;
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Quit")) {
+                m_Running = false;
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("View")) {
+            if (ImGui::MenuItem("Game Browser")) {
+                s_ShowGameBrowserWindow = true;
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Colours")) {
+                s_ShowSettingsWindow = true;
+            }
+            if (ImGui::MenuItem("FEN")) {
+                s_ShowFENWindow     = true;
+            }
+            if (ImGui::MenuItem("Engine")) {
+                s_ShowEngineWindow  = true;
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("About")) {
+            ImGui::Text("SDL3 Backend");
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
 
-    m_Layout.Render();
+    // m_Layout.Render();
+
+    chess::application::RenderConfigureGameWindow(&s_ShowConfigureGameWindow, s_NewGameConfig);
+    chess::application::RenderGameBrowserWindow(&s_ShowGameBrowserWindow, game_configurations, m_Games);
 
     if (s_ShowFENWindow) {
         ImGui::Begin("FEN", &s_ShowFENWindow);
@@ -354,8 +382,9 @@ void Application::RenderImGui() {
                 m_Board->Reset();  // Reset FEN string
                 m_BoardFEN = m_Board->ToFEN();
             }
-            if (m_RunningEngine)
+            if (m_RunningEngine) {
                 m_RunningEngine->SetPosition(m_BoardFEN);
+            }
             m_WhiteSidebar.ClearChat();
             m_BlackSidebar.ClearChat();
         }

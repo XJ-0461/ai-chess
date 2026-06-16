@@ -1,4 +1,4 @@
-#ifdef IGNORE_THIS_FILE_
+#ifdef IGNORE_THIS_FILE_MIGRATING_AWAY_FROM_THIS_FILE_
 
 #include "Application.h"
 

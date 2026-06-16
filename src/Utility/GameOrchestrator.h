@@ -1,3 +1,5 @@
+#ifdef IGNORE_THIS_FILE_MIGRATING_AWAY_FROM_THIS_FILE_
+
 #pragma once
 
 #include <memory>
@@ -13,6 +15,7 @@ enum class MatchState {
     PendingSetup,
     WhiteTurn,
     BlackTurn,
+    DrawOffer,
     WhiteRetrospective,
     BlackRetrospective,
     GameOver
@@ -38,6 +41,7 @@ public:
 private:
     void OrchestratorLoop(std::stop_token st);
     void HandleTurn(std::shared_ptr<ZMQAgentServer> activeAgent, std::shared_ptr<ZMQAgentServer> opponentAgent, MatchState nextState);
+    void HandleDrawOffer();
     void HandleRetrospective(std::shared_ptr<ZMQAgentServer> activeAgent, std::shared_ptr<ZMQAgentServer> opponentAgent, MatchState nextState);
 
     std::shared_ptr<ZMQAgentServer> m_WhiteAgent;
@@ -47,6 +51,7 @@ private:
 
     std::vector<std::string> m_GameHistory;
     MatchState m_State = MatchState::PendingSetup;
+    MatchState m_PreDrawState = MatchState::PendingSetup;
     std::jthread m_Thread;
 
     uint32_t m_RetrospectiveRounds = 0;
@@ -54,3 +59,5 @@ private:
     std::string m_Winner = "DRAW";
     std::string m_EndCause = "UNKNOWN";
 };
+
+#endif

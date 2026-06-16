@@ -19,13 +19,17 @@ set(SOURCES
     "src/Application/ChessPanel.cpp"
     "src/Application/EnginePanel.cpp"
     "src/Application/SettingsPanel.cpp"
+    src/Application/ConfigureGameWindow.h
+    src/Application/ConfigureGameWindow.cpp
+    src/Application/GameBrowserWindow.h
+    src/Application/GameBrowserWindow.cpp
     "src/Application/AgentChat/AgentSidebar.h"
     "src/Application/AgentChat/AgentSidebar.cpp"
     "src/Application/Resources.h"
 
     src/Application/CentralChessboardPanel.h
     src/Application/CentralChessboardPanel.cpp
-    src/Application/Layout.hpp
+    src/Application/ThreeColumnGameWindow.hpp
 
     src/Application/AgentChat/ChatBubble/BaseBubble.h
     src/Application/AgentChat/ChatBubble/InfoBubble.h
@@ -72,6 +76,8 @@ set(SOURCES
 #    "src/Graphics/Texture.cpp"
 #    "src/Graphics/VertexArray.h"
 #    "src/Graphics/VertexArray.cpp"
+
+    src/Game/Execution/GameOrchestrator.hpp
 
     src/Graphics/RGBA.hpp
     src/Graphics/Board/BoardAtlas.hpp
@@ -180,9 +186,14 @@ cool_vcpkg_SetUpVcpkg(
 cool_vcpkg_DeclarePackage(NAME nlohmann-json)
 cool_vcpkg_DeclarePackage(NAME cppzmq)
 cool_vcpkg_DeclarePackage(NAME concurrentqueue)
-cool_vcpkg_DeclarePackage(NAME sdl3 VERSION "3.4.10#1")
-cool_vcpkg_DeclarePackage(NAME sdl3-image VERSION "3.4.4#0")
-cool_vcpkg_DeclarePackage(NAME imgui VERSION "1.92.8#0" FEATURES sdl3-binding sdl3-renderer-binding sdlgpu3-binding)
+cool_vcpkg_DeclarePackage(NAME sdl3 VERSION "3.4.10#1" FEATURES wayland x11 vulkan)
+cool_vcpkg_DeclarePackage(NAME sdl3-image VERSION "3.4.4#0" FEATURES png webp jpeg)
+cool_vcpkg_DeclarePackage(NAME sdl3-mixer VERSION "3.2.4#0" FEATURES wavpack)
+cool_vcpkg_DeclarePackage(NAME imgui VERSION "1.92.8#0"
+    FEATURES docking-experimental sdl3-binding sdl3-renderer-binding sdlgpu3-binding opengl3-binding
+)
+cool_vcpkg_DeclarePackage(NAME sobjectizer VERSION "5.8.5.1#0")
+cool_vcpkg_DeclarePackage(NAME cpr VERSION "1.14.2#0")
 
 cool_vcpkg_InstallPackages()
 
@@ -192,8 +203,9 @@ find_package(concurrentqueue CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL3_image CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(SObjectizer CONFIG REQUIRED)
 
-function(Chess_GenerateAtlas)
+function(Chess_GenerateRGBA)
     set(oneValueArgs PNG_PATH OUTPUT_PATH)
     cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
 
@@ -225,19 +237,15 @@ function(Chess_GenerateAtlas)
     target_sources(${PROJECT_NAME} PRIVATE "${ARG_OUTPUT_PATH}")
 endfunction()
 
-Chess_GenerateAtlas(
+Chess_GenerateRGBA(
     PNG_PATH "${CMAKE_CURRENT_SOURCE_DIR}/resources/textures/Pieces.png"
     OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/resources/Pieces.rgba"
 )
 
-Chess_GenerateAtlas(
+Chess_GenerateRGBA(
     PNG_PATH "${CMAKE_CURRENT_SOURCE_DIR}/resources/textures/Board.png"
     OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/resources/Board.rgba"
 )
-
-# set(IMGUI_VERSION "1.92.6")
-#set(GLM_VERSION "1.0.3")
-#set(GLFW_VERSION "3.4")
 
 # GLFW
 set(BUILD_SHARED_LIBS OFF)
@@ -246,91 +254,16 @@ set(GLFW_BUILD_TESTS OFF)
 set(GLFW_BUILD_DOCS OFF)
 set(GLFW_INSTALL OFF)
 
-#FetchContent_Declare(
-#    imgui
-#    DOWNLOAD_EXTRACT_TIMESTAMP OFF
-#    # URL https://github.com/ocornut/imgui/archive/refs/tags/v${IMGUI_VERSION}.tar.gz
-#    GIT_REPOSITORY https://github.com/ocornut/imgui
-#    GIT_TAG 934c6a5f5ef2355d6df25395d555cb71f790c4e9
-#)
-
-#FetchContent_Declare(
-#    glm
-#    DOWNLOAD_EXTRACT_TIMESTAMP OFF
-#    URL https://github.com/g-truc/glm/releases/download/${GLM_VERSION}/glm-${GLM_VERSION}.7z
-#)
-#
-#FetchContent_Declare(
-#    glfw
-#    DOWNLOAD_EXTRACT_TIMESTAMP OFF
-#    URL https://github.com/glfw/glfw/archive/refs/tags/${GLFW_VERSION}.tar.gz
-#)
-#
-#FetchContent_MakeAvailable(
-#    #imgui
-#    glm glfw)
-
-#set(IMGUI_SOURCES
-#    "${imgui_SOURCE_DIR}/imconfig.h"
-#    "${imgui_SOURCE_DIR}/imgui.cpp"
-#    "${imgui_SOURCE_DIR}/imgui_demo.cpp"
-#    "${imgui_SOURCE_DIR}/imgui_draw.cpp"
-#    "${imgui_SOURCE_DIR}/imgui.h"
-#    "${imgui_SOURCE_DIR}/imgui_internal.h"
-#    "${imgui_SOURCE_DIR}/imgui_tables.cpp"
-#    "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
-#    "${imgui_SOURCE_DIR}/imstb_rectpack.h"
-#    "${imgui_SOURCE_DIR}/imstb_textedit.h"
-#    "${imgui_SOURCE_DIR}/imstb_truetype.h"
-#
-#    "${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
-#    "${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp"
-#)
-#
-#add_library(imgui ${IMGUI_SOURCES})
-
-#target_include_directories(
-#    imgui
-#    PUBLIC
-#    ${imgui_SOURCE_DIR}
-#)
-#
-#target_link_libraries(imgui PRIVATE glfw)
-#target_compile_definitions(imgui PRIVATE GLFW_INCLUDE_NONE)
-
-#############
-# Find OpenGL
-#############
-
-#find_package(OpenGL REQUIRED)
-#if (NOT OpenGL_FOUND)
-#    message(FATAL_ERROR "OpenGL not found")
-#endif()
-#message("OPENGL_FOUND:${OpenGL_FOUND}")
-#message("OPENGL_LIBRARIES:${OpenGL_LIBRARIES}")
-
-# glad
-add_subdirectory(lib/glad)
-
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
-#    glfw
     imgui::imgui
-#    glad
     ${OPENGL_LIBRARY}
     nlohmann_json::nlohmann_json
     cppzmq-static
     concurrentqueue::concurrentqueue
     SDL3::SDL3
     SDL3_image::SDL3_image-static
+    sobjectizer::StaticLib
 )
 
-#set_target_properties(glfw update_mappings glad imgui PROPERTIES FOLDER "DEPENDENCIES/")
-#
-#target_include_directories(${PROJECT_NAME}
-#    PRIVATE
-#    "lib/stb_image/"
-#    "${glm_SOURCE_DIR}/"
-#    "${imgui_SOURCE_DIR}/imgui/"
-#)

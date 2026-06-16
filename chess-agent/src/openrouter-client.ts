@@ -48,6 +48,34 @@ export class OpenRouterClient {
     `;
 
   /**
+   * Generates a unique personality for the agent.
+   */
+  public async generatePersonality(agentName: string, color: "WHITE" | "BLACK"): Promise<string> {
+    await this.enforceRateLimit();
+    console.log(`[OpenRouter] Generating personality for ${agentName} (${color})...`);
+    
+    const result = this.client.callModel({
+      model: this.modelName,
+      instructions: "You are a creative writer. Create a brief personality for a chess-playing AI.",
+      input: [{ 
+        role: "user", 
+        content: `Create a unique personality for a chess-playing AI named ${agentName} playing as ${color}. 
+        Describe their quip style, temperament, and strategic bias. 
+        Keep it under 100 characters. Return ONLY the description text.` 
+      }]
+    });
+
+    let personality = "";
+    for await (const delta of result.getTextStream()) {
+      personality += delta;
+    }
+    
+    personality = personality.trim().substring(0, 100);
+    console.log(`[OpenRouter] Generated personality: "${personality}"`);
+    return personality;
+  }
+
+  /**
    * Requests a move decision from the OpenRouter model.
    * Streams reasoning and message response deltas in real-time.
    * Uses the make_move tool to capture the final choice.
@@ -57,12 +85,17 @@ export class OpenRouterClient {
     opponentQuips: string[],
     color: "WHITE" | "BLACK",
     previousErrors: string[],
+    personality: string,
+    enableQuip: boolean,
+    enableDrawOffer: boolean,
+    enableResignation: boolean,
+    turnNumber: number,
     onReasoning: (delta: string, id: string) => Promise<void> | void,
     onResponse: (delta: string, id: string) => Promise<void> | void,
     onQuip: (message: string, id: string) => Promise<void> | void,
     onFetchBoardState: (id: string) => Promise<any>
-  ): Promise<string> {
-    let chosenMove: string | null = null;
+  ): Promise<{ type: "move"; move: string } | { type: "offer_draw" } | { type: "resign" }> {
+    let decision: { type: "move"; move: string } | { type: "offer_draw" } | { type: "resign" } | null = null;
 
     // NOTE: Pattern from create-headless-agent/SKILL.md (Tool Pattern section)
     // and create-headless-agent/references/tools.md (Default-ON Tools section)
@@ -70,11 +103,69 @@ export class OpenRouterClient {
       name: "make_move",
       description: "Submit your chosen next move in algebraic notation.",
       inputSchema: z.object({
-        algebraic_move_string: z.string().describe("The algebraic chess move, e.g. 'e4', 'Nf3', 'O-O', 'exd5', 'Qxd4+', 'e8(Q)'"),
+        algebraic_move_string: z.string().describe("The algebraic chess move, e.g. 'e4', 'Nf3', 'O-O', 'exd5', 'Qxd4+', 'e8=Q'"),
       }),
       execute: async ({ algebraic_move_string }) => {
-        chosenMove = algebraic_move_string;
+        decision = { type: "move", move: algebraic_move_string };
         return { success: true, move: algebraic_move_string };
+      },
+    });
+
+    const offerDrawTool = tool({
+      name: "offer_draw",
+      description: "Offer a draw to your opponent. You can only do this once per turn.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        decision = { type: "offer_draw" };
+        return { success: true };
+      },
+    });
+
+    const resignTool = tool({
+      name: "resign",
+      description: "Resign the game.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        decision = { type: "resign" };
+        return { success: true };
+      },
+    });
+
+    const makeAlgebraicNotationTool = tool({
+      name: "make_algebraic_notation",
+      description: "Helper to format standard algebraic notation. Returns the formatted string. Use this if unsure about formatting.",
+      inputSchema: z.object({
+        piece_type: z.enum(["K", "Q", "R", "B", "N", "", "P"]).describe("The piece letter. Empty string or 'P' for pawns."),
+        from_coordinate: z.string().describe("The starting square (e.g., 'e2'), or just the file ('e')/rank ('2') for partial disambiguation. For pawn captures, MUST include the file (e.g. 'e'). Empty string if no disambiguation needed."),
+        to_coordinate: z.string().describe("The destination square, e.g., 'e4'."),
+        is_capture: z.boolean(),
+        is_check: z.boolean(),
+        is_checkmate: z.boolean(),
+        promotion: z.enum(["Q", "R", "B", "N", ""]).optional().describe("Piece to promote to, if applicable."),
+      }),
+      execute: async (args) => {
+        let san = "";
+        const isPawn = args.piece_type === "" || args.piece_type === "P";
+        
+        if (isPawn) {
+          if (args.is_capture) {
+            san = (args.from_coordinate.charAt(0) || "") + "x" + args.to_coordinate;
+          } else {
+            san = args.to_coordinate;
+          }
+          if (args.promotion) {
+            san += "=" + args.promotion;
+          }
+        } else {
+          san = args.piece_type + args.from_coordinate;
+          if (args.is_capture) san += "x";
+          san += args.to_coordinate;
+        }
+
+        if (args.is_checkmate) san += "#";
+        else if (args.is_check) san += "+";
+
+        return { success: true, formatted_notation: san };
       },
     });
 
@@ -98,6 +189,9 @@ export class OpenRouterClient {
       execute: async () => {
         const req_id = `${this.conversationId}-${this.response_id}-fetch`;
         const response = await onFetchBoardState(req_id);
+        if (response.error) {
+          return { success: false, error: response.error };
+        }
         return { success: true, data: response };
       },
     });
@@ -111,70 +205,75 @@ export class OpenRouterClient {
       }).join(" ")
       : "No moves have been played yet. It is the start of the game.";
 
-    const systemPrompt = `
-      You are a Grandmaster-level chess engine playing as ${color}.
-      You must evaluate the game history, decide your next best legal move, and output it by calling the \`make_move\` tool.
-      You can optionally use the \`quip\` tool to make a short, witty, or sarcastic remark before or alongside making your move.
-      You can optionally use the \`fetch_board_state\` tool to get the current state of the board if you are confused or recovering from an error.
-      The quip tool should be used sparingly and only when it arises naturally in conversation (e.g. after a blunder by the opponent, or when you have a particularly strong move, or when you want to complement yourself, boast, or taunt the opponent).
-      ${this.quipDescription}
-      Do not feel obligated to respond to each and every quip by the opponent, quip when it suits you or makes you feel some type of way!
-      At the start of the match, before your first move is played, determine your personality that will determine your quip style, temperament, and frequency. Persist this style throughout the match.
-      Explain your strategic reasoning, pawn structures, key threats, and short/long-term plans.
-      Do NOT write code or discuss implementation details. Just think and play chess.
-      Ensure the move you decide is a valid, legal chess move in standard algebraic notation.
-      Use 'O-O' for kingside castling and 'O-O-O' for queenside castling.
-      When a pawn promotes, the piece promoted to is indicated at the end. For example, a pawn on e7 promoting to a queen on e8 may be variously rendered as e8Q, e8(Q)
-    `;
+    const systemPrompt = `You are a Grandmaster-level chess engine playing as ${color}.
+      Personality: ${personality}
+
+      Your absolute priority is to decide the next best legal chess move and submit it using the \`make_move\` tool. 
+      You are FORBIDDEN from passing your turn. You MUST call the \`make_move\` tool.
+
+      Chess Rules:
+      - Use standard algebraic notation (e.g., e4, Nf3, O-O, exd5, e8=Q).
+      - Captures MUST use 'x' (e.g., Bxe5).
+      - Promotion MUST use '=' (e.g., a8=Q).
+      - Disambiguate if needed (e.g., Nbd2, R1e2).
+      - Use \`make_algebraic_notation\` tool if you need help formatting the string.
+      - Use \`fetch_board_state\` if you are confused or recovering from an error.
+      ${enableDrawOffer ? "- You may use \`offer_draw\` to propose a draw (once per turn)." : ""}
+      ${enableResignation ? "- You may use \`resign\` to forfeit the match." : ""}
+
+      ${enableQuip ? "You can optionally use the \`quip\` tool to taunt or boast before making your move. " + this.quipDescription : ""}
+      
+      Begin by explaining your strategy and reasoning. 
+      IMPORTANT: State your final move clearly in natural language at the end of your reasoning, then call the \`make_move\` tool with that exact move. 
+      DO NOT use JSON or tool-calling syntax in your natural language response. Just think, talk, and then use the tools.`;
 
     const errorText = previousErrors.length > 0
-      ? `\nPREVIOUS ATTEMPT ERRORS (You must fix these, remember you have access to fetch_board_state tool if necessary):\n${previousErrors.join("\n")}\n`
+      ? `\nErrors from previous attempts: ${previousErrors.join("; ")}\n`
       : "";
 
     const quipsText = opponentQuips.length > 0
-      ? `\nOpponent's recent quips:\n${opponentQuips.map(q => `"${q}"`).join("\n")}\n`
+      ? `\nOpponent quips: ${opponentQuips.map(q => `"${q}"`).join(", ")}\n`
       : "";
 
-    const userPrompt = `Game History so far:
-${historyText}
-
+    const userPrompt = `History: ${historyText}
+Turn: ${turnNumber}
 Current Turn: ${color}
 ${errorText}${quipsText}
-Please explain your reasoning and strategy, then make your next move by calling the \`make_move\` tool. You may also use the \`quip\` tool or \`fetch_board_state\` tool if needed.`;
+Decide your move, explain why, and then call \`make_move\`. Alternatively, call \`offer_draw\` or \`resign\` if applicable.`;
 
-    const generateMovePromise = async (): Promise<string> => {
+    const generateMovePromise = async (): Promise<{ type: "move"; move: string } | { type: "offer_draw" } | { type: "resign" }> => {
       const maxRetries = 3;
-      let lastError: any = null;
+      let lastApiError: any = null;
+
+      const activeTools: any[] = [makeMoveTool, fetchBoardStateTool, makeAlgebraicNotationTool];
+      if (enableQuip) activeTools.push(quipTool);
+      if (enableDrawOffer) activeTools.push(offerDrawTool);
+      if (enableResignation) activeTools.push(resignTool);
 
       for (let attempt = 0; attempt < maxRetries; attempt++) {
+        let toolCallsMade = 0;
         try {
           console.log(`[OpenRouter] Initiating callModel for ${this.modelName}... (Attempt ${attempt}/${maxRetries})`);
-          chosenMove = null; // Reset on retry
+          decision = null;
 
           this.response_id = this.response_id + 1;
           const res_id = `${this.conversationId}-${this.response_id}-response`;
           const reason_id = `${this.conversationId}-${this.response_id}-reasoning`;
-          const move_id = `${this.conversationId}-${this.response_id}-move`;
 
           await this.enforceRateLimit();
-          // NOTE: Pattern from create-headless-agent/sample/src/agent.ts (runAgent function, callModel configuration)
-          // const timeout_signal = AbortSignal.timeout(10000); // 10 second timeout
-          const result =
-              this.client.callModel(
-                {
-                  model: this.modelName,
-                  instructions: systemPrompt,
-                  input: [{ role: "user", content: userPrompt }],
-                  tools: [makeMoveTool, quipTool, fetchBoardStateTool],
-                  state: this.stateAccessor,
-                  reasoning: { enabled: true },
-                  // NOTE: hasToolCall stop condition is described in create-headless-agent/SKILL.md (What @openrouter/agent handles section)
-                  stopWhen: [
-                    hasToolCall("make_move")
-                  ]
-                },
-                // { signal: timeout_signal }
-            );
+          const result = this.client.callModel({
+            model: this.modelName,
+            instructions: systemPrompt,
+            input: [{ role: "user", content: userPrompt }],
+            tools: activeTools,
+            state: this.stateAccessor,
+            reasoning: { enabled: true },
+            stopWhen: [
+              hasToolCall("make_move"),
+              hasToolCall("offer_draw"),
+              hasToolCall("resign")
+            ]
+          });
 
           let accumulatedText = "";
           let accumulatedReasoning = "";
@@ -188,96 +287,149 @@ Please explain your reasoning and strategy, then make your next move by calling 
 
           const streamItems = async () => {
             for await (const item of result.getItemsStream()) {
-              const id = item.id;
               if (item.type === "reasoning") {
                 const text = item.summary?.map((s: { text: string }) => s.text).join("") ?? "";
                 if (text.length > accumulatedReasoning.length) {
                   accumulatedReasoning = text;
                   await onReasoning(text, reason_id);
                 }
+              } else if (item.type === "function_call" && item.status === "completed") {
+                console.log(`[OpenRouter] Model calling tool: ${item.name}`);
+                toolCallsMade++;
               }
             }
           };
 
           await Promise.all([streamText(), streamItems()]);
+          await result.getResponse();
 
-          // If the stream finished but the tool wasn't invoked via execute, check outputText
-          // console.log("[OpenRouter] Tool execution not captured, checking final response...");
-          // // NOTE: Pattern from create-headless-agent/sample/src/agent.ts (line 93: getResponse)
-          // const response = await result.getResponse();
-          // // NOTE: Pattern from create-headless-agent/sample/src/agent.ts (line 96: check response.outputText)
-          // const text = accumulatedText || response.outputText || "";
-          //
-          // // Fallback parsing: look for make_move call or general move formats
-          // const regex = /make_move\s*\(\s*\{\s*algebraic_move_string:\s*["']([^"']+)["']/i;
-          // const match = text.match(regex);
-          // if (match && match[1]) {
-          //   chosenMove = match[1];
-          // } else {
-          //   // Look for brackets like [MOVE: e4] or similar
-          //   const moveMatch = text.match(/\[MOVE:\s*([a-zA-Z0-9+#=-]+)\]/i);
-          //   if (moveMatch && moveMatch[1]) {
-          //     chosenMove = moveMatch[1];
-          //   }
-          // }
-
-          // the model may call this, it should not be null if the model followed instructions and called the tool correctly.
-          if (!chosenMove) {
-            throw new Error("Model finished but did not submit a move decision via make_move tool.");
+          if (decision) {
+            return decision;
           }
 
-          console.log(`[OpenRouter] Successfully captured move: ${chosenMove}`);
-          return chosenMove;
-        } catch (err: any) {
-          lastError = err;
-          console.error(`[OpenRouter] Attempt ${attempt} failed:`, err.message || err);
-          if (attempt < maxRetries) {
-            const delay = attempt * 2000;
-            console.log(`[OpenRouter] Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+          // LOGIC ERROR: Model finished but didn't call the tool. 
+          // We DO NOT retry internally for this. We throw immediately so the Orchestrator can handle recovery.
+          throw new Error("Model finished but did not submit a move decision via tools.");
+        } catch (error: any) {
+          const isLogicError = error.message === "Model finished but did not submit a move decision via tools.";
+          
+          // If we made side effects (quips, board fetch) OR if it's a logic error, throw immediately.
+          // Retrying after a side effect is dangerous as it might double-execute.
+          if (isLogicError || toolCallsMade > 0 || attempt === maxRetries - 1) {
+            throw error;
           }
+
+          // Otherwise, it's an API/Network error with no side effects. Retry.
+          lastApiError = error;
+          console.error(`[OpenRouter] API Attempt ${attempt} failed:`, error.message);
+          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
         }
       }
 
-      throw lastError || new Error("Failed to generate move after retries.");
+      throw lastApiError || new Error("Failed to generate move due to persistent API errors.");
     };
+return await generateMovePromise();
+}
 
-    try {
-      // NOTE: We've removed the artificial 60s timeout to allow large models (550b+) 
-      // or queued free endpoints sufficient time to process and respond.
-      return await generateMovePromise();
-    } catch (err) {
-      console.error("OpenRouter client execution failed:", err);
-      throw err;
+/**
+* Requests a decision on a draw offer.
+*/
+public async getDrawDecision(
+gameHistory: string[],
+opponentQuips: string[],
+personality: string,
+onReasoning: (delta: string, id: string) => Promise<void> | void,
+onResponse: (delta: string, id: string) => Promise<void> | void
+): Promise<boolean> {
+let accepted = false;
+const respondDrawOfferTool = tool({
+  name: "respond_draw_offer",
+  description: "Accept or decline the draw offer.",
+  inputSchema: z.object({
+    accept: z.boolean().describe("Whether to accept the draw offer.")
+  }),
+  execute: async ({ accept }) => {
+    accepted = accept;
+    return { success: true, accepted: accept };
+  }
+});
+
+const systemPrompt = `You are a Grandmaster-level chess engine. 
+  Personality: ${personality}
+  Your opponent has offered a draw. Analyze the current position and decide whether to accept or decline.
+  Use the \`respond_draw_offer\` tool to submit your decision.`;
+
+const historyText = gameHistory.map((move, index) => {
+  const moveNum = Math.floor(index / 2) + 1;
+  const isWhite = index % 2 === 0;
+  return isWhite ? `${moveNum}. ${move}` : `${move}`;
+}).join(" ");
+
+const userPrompt = `History: ${historyText}\nYour opponent offers a draw. Explain your reasoning and then call \`respond_draw_offer\`.`;
+
+await this.enforceRateLimit();
+this.response_id++;
+const res_id = `${this.conversationId}-${this.response_id}-draw-resp`;
+const reason_id = `${this.conversationId}-${this.response_id}-draw-reason`;
+const result = this.client.callModel({
+    model: this.modelName,
+    state: this.stateAccessor,
+    instructions: systemPrompt,
+    input: [{ role: "user", content: userPrompt }],
+    tools: [respondDrawOfferTool],
+    reasoning: { enabled: true },
+    stopWhen: [hasToolCall("respond_draw_offer")]
+});
+
+let accumulatedText = "";
+let accumulatedReasoning = "";
+
+const streamText = async () => {
+  for await (const delta of result.getTextStream()) {
+    accumulatedText += delta;
+    await onResponse(accumulatedText, res_id);
+  }
+};
+
+const streamItems = async () => {
+  for await (const item of result.getItemsStream()) {
+    if (item.type === "reasoning") {
+      const text = item.summary?.map((s: { text: string }) => s.text).join("") ?? "";
+      if (text.length > accumulatedReasoning.length) {
+        accumulatedReasoning = text;
+        await onReasoning(text, reason_id);
+      }
     }
   }
+};
 
-  /**
-   * Requests a game retrospective analysis and banter from the model.
-   * Uses the end_turn tool to finish the retrospective round.
+await Promise.all([streamText(), streamItems()]);
+await result.getResponse();
+return accepted;
+}
+
+/**
+* Generates a retrospective quip/analysis after the game.
+...
    */
-  public async getRetrospective(
+  public async getRetrospectiveQuips(
     gameHistory: string[],
     opponentQuips: string[],
-    color: "WHITE" | "BLACK",
     winner: string,
     cause: string,
-    onReasoning: (delta: string, id: string) => Promise<void> | void,
-    onResponse: (delta: string, id: string) => Promise<void> | void,
+    personality: string,
     onQuip: (message: string, id: string) => Promise<void> | void
   ): Promise<void> {
     const endTurnTool = tool({
       name: "end_turn",
-      description: "Signal that you are finished with your retrospective analysis and banter for this round.",
+      description: "Signal that you have finished your retrospective quips.",
       inputSchema: z.object({}),
-      execute: async () => {
-        return { success: true };
-      },
+      execute: async () => { return { success: true }; },
     });
 
     const quipTool = tool({
       name: "quip",
-      description: "Make a clever, witty, or sarcastic remark about the game. Max 200 characters.",
+      description: "Make a clever, witty, or sarcastic remark that arises naturally in conversation. Max 200 characters.",
       inputSchema: z.object({
         message: z.string().max(200).describe("The quip message (max 200 chars)"),
       }),
@@ -288,22 +440,24 @@ Please explain your reasoning and strategy, then make your next move by calling 
       },
     });
 
+    const systemPrompt = `You are a Grandmaster-level chess engine. The game has concluded.
+      Winner: ${winner}, Cause: ${cause}
+      Personality: ${personality}
+
+      Use the \`quip\` tool to share your thoughts, boast, or taunt your opponent based on the result.
+      ${this.quipDescription}
+      The opponent can see your quips. You may also respond to their previous quips if relevant.
+      Quip style MUST align with your personality.
+
+      Do NOT call \`make_move\`. The game is over.
+      When you are done quipping, call \`end_turn\`.
+    `;
+
     const historyText = gameHistory.map((move, index) => {
       const moveNum = Math.floor(index / 2) + 1;
       const isWhite = index % 2 === 0;
       return isWhite ? `${moveNum}. ${move}` : `${move}`;
     }).join(" ");
-
-    const systemPrompt = `You are a Grandmaster-level chess engine. The game has concluded.
-      RESULT: ${winner} won by ${cause}. (If result is DRAW, it was a STALEMATE).
-      You are playing as ${color}.
-      Analyze the game history, identify critical blunders, brilliant moves, or pivotal moments.
-      Use the \`quip\` tool to share your thoughts, boast, or taunt your opponent based on the result.
-      ${this.quipDescription}
-      The opponent can see your quips. You may also respond to their previous quips if relevant.
-      When you are finished with your analysis and banter for this turn, you MUST call the \`end_turn\` tool.
-      Do NOT call \`make_move\`. The game is over.
-    `;
 
     const quipsText = opponentQuips.length > 0
       ? `\nOpponent's recent quips:\n${opponentQuips.map(q => `"${q}"`).join("\n")}\n`
@@ -312,51 +466,20 @@ Please explain your reasoning and strategy, then make your next move by calling 
     const userPrompt = `Final Game History:
 ${historyText}
 
-The game is over. Winner: ${winner}, Cause: ${cause}.
+Result: ${winner} won by ${cause}.
 ${quipsText}
 Please analyze the game and provide your retrospective quips, then call \`end_turn\`.`;
 
-    try {
-      this.response_id++;
-      const res_id = `${this.conversationId}-${this.response_id}-retrospective-response`;
-      const reason_id = `${this.conversationId}-${this.response_id}-retrospective-reasoning`;
-
-      await this.enforceRateLimit();
-      const result = this.client.callModel({
+    await this.enforceRateLimit();
+    this.response_id++;
+    const result = this.client.callModel({
         model: this.modelName,
+        state: this.stateAccessor,
         instructions: systemPrompt,
         input: [{ role: "user", content: userPrompt }],
         tools: [quipTool, endTurnTool],
-        state: this.stateAccessor,
-        reasoning: { enabled: true },
         stopWhen: [hasToolCall("end_turn")]
-      });
-
-      let accumulatedText = "";
-      let accumulatedReasoning = "";
-
-      const streamText = async () => {
-        for await (const delta of result.getTextStream()) {
-          accumulatedText += delta;
-          await onResponse(accumulatedText, res_id);
-        }
-      };
-
-      const streamItems = async () => {
-        for await (const item of result.getItemsStream()) {
-          if (item.type === "reasoning") {
-            const text = item.summary?.map((s: { text: string }) => s.text).join("") ?? "";
-            if (text.length > accumulatedReasoning.length) {
-              accumulatedReasoning = text;
-              await onReasoning(text, reason_id);
-            }
-          }
-        }
-      };
-
-      await Promise.all([streamText(), streamItems()]);
-    } catch (err) {
-      console.error("[OpenRouter] Retrospective failed:", err);
-    }
+    });
+    await result.getResponse();
   }
 }

@@ -6,6 +6,7 @@
 #include <atomic>
 
 #include <SDL3/SDL.h>
+#include <so_5/wrapped_env.hpp>
 
 #include "Graphics/Pieces/PieceAtlas.hpp"
 #include "Graphics/Board/BoardAtlas.hpp"
@@ -14,7 +15,9 @@
 #include "Engine/Engine.h"
 #include "Application/AgentChat/AgentSidebar.h"
 #include "Application/CentralChessboardPanel.h"
-#include "Application/Layout.hpp"
+#include "Application/ThreeColumnGameWindow.hpp"
+#include "Game/Configuration/GameConfiguration.hpp"
+#include "Game/Execution/GameOrchestrator.hpp"
 #include "Utility/GameOrchestrator.h"
 
 struct ProgramArgs {
@@ -37,7 +40,6 @@ public:
     Application(const Application&) = delete;
     Application(Application&&) = delete;
 
-
     ~Application();
 
     Application& operator=(const Application&) = delete;
@@ -52,6 +54,9 @@ public:
     void Run();
 
     void UpdatePlayerColorPalette(Colour piece_color, PieceColorPaletteT palette);
+
+    void ToggleMainMenuBar() { m_ShowMainMenuBar = !m_ShowMainMenuBar; }
+    bool IsMainMenuBarVisible() const { return m_ShowMainMenuBar; }
 
 private:
     void Init();
@@ -83,10 +88,15 @@ private:
     } m_WindowProperties;
 
     bool m_Running = false;
+    bool m_ShowMainMenuBar = true;
+
+    std::shared_ptr<so_5::wrapped_env_t> m_GameOrchestrationEnvironment{nullptr};
+    std::unordered_map<std::string, chess::game::GameConfiguration> game_configurations{};
+    std::unordered_map<std::string, std::shared_ptr<chess::game::execution::GameOrchestrator>> m_Games{};
 
     std::shared_ptr<Board> m_Board;
     std::shared_ptr<std::mutex> m_BoardMutex;
-    std::shared_ptr<GameOrchestrator> m_Orchestrator;
+    // std::shared_ptr<GameOrchestrator> m_Orchestrator;
 
     Square m_SelectedPiece = INVALID_SQUARE;
     bool m_IsHoldingPiece = false;  // If the selected piece follows the mouse
@@ -120,8 +130,6 @@ private:
 
     Layout<AgentSidebar, CentralChessboardPanel, AgentSidebar> m_Layout{ &m_WhiteSidebar, &m_CentralPanel, &m_BlackSidebar };
 
-    std::shared_ptr<ZMQAgentServer> m_WhiteAgent;
-    std::shared_ptr<ZMQAgentServer> m_BlackAgent;
     ProgramArgs m_Args;
     AgentSidebarColorPalette m_AgentSidebarColorPalette;
 };

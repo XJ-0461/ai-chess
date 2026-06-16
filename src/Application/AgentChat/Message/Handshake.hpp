@@ -19,23 +19,34 @@ struct Pong {
 inline void from_json(const nlohmann::json&, Pong&) {}
 
 struct SetupRequest {
-    static constexpr const char* kTypeTag = "setup";
+    static constexpr auto kTypeTag = "setup";
     std::string color;
+    bool enable_quip{false};
+    bool enable_draw_offer{false};
+    bool enable_resignation{false};
 };
 
 inline void to_json(nlohmann::json& j, const SetupRequest& m) {
-    j = nlohmann::json{{"type", SetupRequest::kTypeTag}, {"color", m.color}};
+    j = nlohmann::json{
+        {"type", SetupRequest::kTypeTag},
+        {"color", m.color},
+        {"enable_quip", m.enable_quip},
+        {"enable_draw_offer", m.enable_draw_offer},
+        {"enable_resignation", m.enable_resignation}
+    };
 }
 
 struct SetupResponse {
     static constexpr const char* kTypeTag = "setup_ack";
     std::string model;
     std::string color;
+    std::string personality;
 };
 
 inline void from_json(const nlohmann::json& j, SetupResponse& m) {
     m.model = j.value("model", "Unknown Model");
     m.color = j.value("color", "unknown");
+    m.personality = j.value("personality", "");
 }
 
 } // namespace chess::agent::message

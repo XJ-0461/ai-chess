@@ -8,12 +8,16 @@ namespace chess::agent::message {
 struct GameHistory {
     static constexpr const char* kTypeTag = "game_history";
     std::vector<std::string> game_history;
+    std::vector<std::string> opponent_quips;
+    std::string personality;
 };
 
 inline void to_json(nlohmann::json& j, const GameHistory& m) {
     j = nlohmann::json{
         {"type", GameHistory::kTypeTag},
-        {"game_history", m.game_history}
+        {"game_history", m.game_history},
+        {"opponent_quips", m.opponent_quips},
+        {"personality", m.personality}
     };
 }
 
@@ -34,14 +38,18 @@ inline void to_json(nlohmann::json& j, const GameEnd& m) {
 struct ErrorRecoveryRequest {
     static constexpr const char* kTypeTag = "error_recovery";
     std::vector<std::string> game_history;
+    std::vector<std::string> opponent_quips;
     std::vector<std::string> errors;
+    std::string personality;
 };
 
 inline void to_json(nlohmann::json& j, const ErrorRecoveryRequest& m) {
     j = nlohmann::json{
         {"type", ErrorRecoveryRequest::kTypeTag},
         {"game_history", m.game_history},
-        {"errors", m.errors}
+        {"opponent_quips", m.opponent_quips},
+        {"errors", m.errors},
+        {"personality", m.personality}
     };
 }
 
@@ -51,6 +59,7 @@ struct RetrospectiveRequest {
     std::vector<std::string> opponent_quips;
     std::string winner;
     std::string cause;
+    std::string personality;
 };
 
 inline void to_json(nlohmann::json& j, const RetrospectiveRequest& m) {
@@ -59,7 +68,8 @@ inline void to_json(nlohmann::json& j, const RetrospectiveRequest& m) {
         {"game_history", m.game_history},
         {"opponent_quips", m.opponent_quips},
         {"winner", m.winner},
-        {"cause", m.cause}
+        {"cause", m.cause},
+        {"personality", m.personality}
     };
 }
 

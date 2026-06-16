@@ -12,6 +12,17 @@ enum Colour : uint8_t {
     ColourCount = 2
 };
 
+constexpr std::string_view AsStringView(const Colour color) {
+    switch (color) {
+        case White:
+            return "White";
+        case Black:
+            return "Black";
+        default:
+            return "ERROR"; // should throw here
+    }
+}
+
 enum PieceType : uint8_t {
     Pawn,
     Knight,
