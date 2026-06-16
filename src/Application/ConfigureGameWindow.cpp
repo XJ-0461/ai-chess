@@ -33,7 +33,7 @@ void RenderConfigureGameWindow(bool* show, game::GameConfiguration& config) {
 
         ImGui::Separator();
         ImGui::BeginDisabled(); // Not hooked up yet
-        if (ImGui::Button("Play", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+        if (ImGui::Button("Create", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
             // Future: Spawn actor
         }
         ImGui::EndDisabled();
