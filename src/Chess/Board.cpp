@@ -2,6 +2,7 @@
 #include "Game.h"
 #include "PseudoLegal.h"
 
+#include "Game/Error/AgentMoveError.hpp"
 #include "Utility/StringParser.h"
 
 #include <sstream>
@@ -416,7 +417,7 @@ LongAlgebraicMove Board::Move(AlgebraicMove m) {
         
         if (SquareCount(possiblePieces) != 1) {
             if (SquareCount(possiblePieces) == 0)
-                throw IllegalMoveException(m.ToString(), "No piece can more to specified square!");
+                throw IllegalMoveException(m.ToString(), "No piece can move to specified square!");
             else
                 throw IllegalMoveException(m.ToString(), "More than one piece can move to the same square!");
         }
@@ -436,6 +437,15 @@ LongAlgebraicMove Board::Move(AlgebraicMove m) {
 
     if (!IsMoveLegal({ source, m.Destination }))
         throw IllegalMoveException(m.ToString());
+
+    // Validate capture notation: if Capture flag set, there must be a piece to capture
+    // Exception: en passant (destination is empty but the captured pawn is on a different square)
+    if (m.Flags & MoveFlag::Capture) {
+        bool isEnPassant = (m.MovingPiece == Pawn && m.Destination == m_EnPassantSquare);
+        if (!isEnPassant && m_Board[m.Destination] == Piece::None) {
+            throw InvalidCaptureException(m.ToString());
+        }
+    }
 
     m_EnPassantSquare = newEnPassantSquare;
 

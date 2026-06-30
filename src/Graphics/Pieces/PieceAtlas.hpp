@@ -9,9 +9,10 @@
 #include <string>
 #include <string_view>
 
-#include <SDL3/SDL.h>
+#include <memory>
 
 #include "../RGBA.hpp"
+#include "../GLTexture.hpp"
 
 static constexpr std::uint8_t kPieceAtlasBytes[] = {
     #embed "Pieces.rgba"
@@ -346,9 +347,19 @@ constexpr auto PaletteSwap(const PieceAtlasColorPaletteMaskT& mask, PieceColorPa
 
 }
 
+// A region of an atlas texture. `texture` is an ImTextureID (a GL texture
+// name) understood directly by the Dear ImGui OpenGL3 backend; `region` is in
+// atlas pixel coordinates and consumers derive UVs from it.
+struct TextureViewRegion {
+    float x{0.0f};
+    float y{0.0f};
+    float w{0.0f};
+    float h{0.0f};
+};
+
 struct TextureView {
-    SDL_Texture* texture{nullptr};
-    SDL_FRect region{0.0f, 0.0f, 0.0f, 0.0f};
+    ImTextureID texture{0};
+    TextureViewRegion region{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 class PaletteSwappedPieceAtlas {
@@ -368,77 +379,64 @@ public:
         King = 5
     };
 
-    PaletteSwappedPieceAtlas(
-        const PieceColorPaletteT color_palette,
-        std::shared_ptr<SDL_Renderer> renderer
-    ) : color_palette_(std::move(color_palette)),
-        renderer_(std::move(renderer)) {}
+    explicit PaletteSwappedPieceAtlas(
+        const PieceColorPaletteT color_palette
+    ) : color_palette_(std::move(color_palette)) {}
 
     ~PaletteSwappedPieceAtlas() {
-        if (atlas_texture_) {
-            SDL_DestroyTexture(atlas_texture_);
+        if (atlas_texture_ != 0) {
+            glDeleteTextures(1, &atlas_texture_);
         }
     }
 
     PaletteSwappedPieceAtlas(const PaletteSwappedPieceAtlas&) = delete;
     PaletteSwappedPieceAtlas& operator=(const PaletteSwappedPieceAtlas&) = delete;
 
+    // Performs the palette swap and uploads the result as a GL texture.
+    // Requires a current GL context.
     void MakeTexture() {
         const auto swapped_pixels = PaletteSwap(kPieceAtlasColorPaletteMask, color_palette_);
-        SDL_Surface* surface = SDL_CreateSurfaceFrom(
-            kTotalWidth,
-            kPieceHeight,
-            SDL_PIXELFORMAT_RGBA32,
-            (void*)swapped_pixels.data(),
-            kPitch
+        atlas_texture_ = chess::graphics::UploadRGBATexture(
+            swapped_pixels.data(),
+            static_cast<int>(kTotalWidth),
+            static_cast<int>(kPieceHeight),
+            static_cast<int>(kTotalWidth)
         );
-
-        if (!surface) {
-            throw std::runtime_error("Failed to create texture");
-        }
-
-        atlas_texture_ = SDL_CreateTextureFromSurface(renderer_.get(), surface);
-        SDL_DestroySurface(surface);
-
-        if (!atlas_texture_) {
-            throw std::runtime_error("Failed to create SDL_Texture from palette-swapped surface.");
-        }
     }
 
-    // Direct access to the raw texture resource
-    [[nodiscard]] SDL_Texture* GetAtlasTexture() const { return atlas_texture_; }
+    // Direct access to the raw texture resource (a GL texture name).
+    [[nodiscard]] ImTextureID GetAtlasTexture() const { return static_cast<ImTextureID>(atlas_texture_); }
 
     [[nodiscard]] PieceColorPaletteT GetColorPalette() const { return color_palette_; }
 
-    // --- Piece Accessors returning exact SDL3 source clip region coordinates ---
-    [[nodiscard]] TextureView GetPawnTexture() const { 
-        return TextureView{ atlas_texture_, SDL_FRect{ 0.0f, 0.0f, 16.0f, 16.0f } }; 
+    // --- Piece Accessors returning exact atlas source clip region coordinates ---
+    [[nodiscard]] TextureView GetPawnTexture() const {
+        return TextureView{ GetAtlasTexture(), TextureViewRegion{ 0.0f, 0.0f, 16.0f, 16.0f } };
     }
 
-    [[nodiscard]] TextureView GetKnightTexture() const { 
-        return TextureView{ atlas_texture_, SDL_FRect{ 16.0f, 0.0f, 16.0f, 16.0f } }; 
+    [[nodiscard]] TextureView GetKnightTexture() const {
+        return TextureView{ GetAtlasTexture(), TextureViewRegion{ 16.0f, 0.0f, 16.0f, 16.0f } };
     }
 
-    [[nodiscard]] TextureView GetRookTexture() const { 
-        return TextureView{ atlas_texture_, SDL_FRect{ 32.0f, 0.0f, 16.0f, 16.0f } }; 
+    [[nodiscard]] TextureView GetRookTexture() const {
+        return TextureView{ GetAtlasTexture(), TextureViewRegion{ 32.0f, 0.0f, 16.0f, 16.0f } };
     }
 
-    [[nodiscard]] TextureView GetBishopTexture() const { 
-        return TextureView{ atlas_texture_, SDL_FRect{ 48.0f, 0.0f, 16.0f, 16.0f } }; 
+    [[nodiscard]] TextureView GetBishopTexture() const {
+        return TextureView{ GetAtlasTexture(), TextureViewRegion{ 48.0f, 0.0f, 16.0f, 16.0f } };
     }
 
-    [[nodiscard]] TextureView GetQueenTexture() const { 
-        return TextureView{ atlas_texture_, SDL_FRect{ 64.0f, 0.0f, 16.0f, 16.0f } }; 
+    [[nodiscard]] TextureView GetQueenTexture() const {
+        return TextureView{ GetAtlasTexture(), TextureViewRegion{ 64.0f, 0.0f, 16.0f, 16.0f } };
     }
 
-    [[nodiscard]] TextureView GetKingTexture() const { 
-        return TextureView{ atlas_texture_, SDL_FRect{ 80.0f, 0.0f, 16.0f, 16.0f } }; 
+    [[nodiscard]] TextureView GetKingTexture() const {
+        return TextureView{ GetAtlasTexture(), TextureViewRegion{ 80.0f, 0.0f, 16.0f, 16.0f } };
     }
 
 private:
 
     PieceColorPaletteT color_palette_{};
-    std::shared_ptr<SDL_Renderer> renderer_{nullptr};
-    SDL_Texture* atlas_texture_{nullptr};
+    GLuint atlas_texture_{0};
 
 };

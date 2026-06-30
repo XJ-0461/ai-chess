@@ -1,0 +1,29 @@
+module Tristan.Community.ChessColiseum.Type;
+
+obj Color is Enum {
+
+    meta {
+        let String NormalName = "Color";
+        let Int32 Id = 1001;
+        let Array[String, 2] NormalFieldNames = Array[String, 2].new(
+            "White",
+            "Black"
+        );
+    }
+
+    fields {
+        let UInt64 value = 0;
+        let UInt64 White = 0;
+        let UInt64 Black = 1;
+    }
+
+    functions {
+
+        fn new(UInt64 ordinal) -> Color {
+            this.value = ordinal;
+            return this;
+        }
+
+    }
+
+}

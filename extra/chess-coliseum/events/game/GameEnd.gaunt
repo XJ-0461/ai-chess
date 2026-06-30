@@ -1,0 +1,8 @@
+module Tristan.Community.ChessColiseum.Event;
+
+obj GameEnd is Event {
+    meta {
+        let String NormalName = "Game End";
+        let Int32 Id = 1202;
+    }
+}

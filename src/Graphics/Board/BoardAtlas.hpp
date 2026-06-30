@@ -7,9 +7,8 @@
 #include <memory>
 #include <algorithm>
 
-#include <SDL3/SDL.h>
-
 #include "../RGBA.hpp"
+#include "../GLTexture.hpp"
 
 static constexpr std::uint8_t kBoardAtlasBytes[] = {
     #embed "Board.rgba"
@@ -136,8 +135,11 @@ constexpr auto BoardPaletteSwap(const BoardAtlasColorPaletteMaskT& mask, BoardCo
 }
 
 struct BoardTextureView {
-    SDL_Texture* texture{nullptr};
-    SDL_FRect region{0.0f, 0.0f, 0.0f, 0.0f};
+    ImTextureID texture{0};
+    float x{0.0f};
+    float y{0.0f};
+    float w{0.0f};
+    float h{0.0f};
 };
 
 class PaletteSwappedBoardAtlas {
@@ -147,46 +149,33 @@ public:
     static constexpr std::size_t kBoardHeight = 142;
     static constexpr std::size_t kPitch = kBoardWidth * 4;
 
-    PaletteSwappedBoardAtlas(
-        const BoardColorPaletteT color_palette,
-        std::shared_ptr<SDL_Renderer> renderer
-    ) {
+    // Performs the palette swap and uploads the result as a GL texture.
+    // Requires a current GL context.
+    explicit PaletteSwappedBoardAtlas(const BoardColorPaletteT color_palette) {
         const auto swapped_pixels = BoardPaletteSwap(kBoardAtlasColorPaletteMask, color_palette);
-        SDL_Surface* surface = SDL_CreateSurfaceFrom(
-            kBoardWidth,
-            kBoardHeight,
-            SDL_PIXELFORMAT_RGBA32,
-            (void*)swapped_pixels.data(),
-            kPitch
+        board_texture_ = chess::graphics::UploadRGBATexture(
+            swapped_pixels.data(),
+            static_cast<int>(kBoardWidth),
+            static_cast<int>(kBoardHeight),
+            static_cast<int>(kBoardWidth)
         );
-
-        if (!surface) {
-            throw std::runtime_error("Failed to create board surface");
-        }
-
-        board_texture_ = SDL_CreateTextureFromSurface(renderer.get(), surface);
-        SDL_DestroySurface(surface);
-
-        if (!board_texture_) {
-            throw std::runtime_error("Failed to create SDL_Texture for board.");
-        }
     }
 
     ~PaletteSwappedBoardAtlas() {
-        if (board_texture_) {
-            SDL_DestroyTexture(board_texture_);
+        if (board_texture_ != 0) {
+            glDeleteTextures(1, &board_texture_);
         }
     }
 
     PaletteSwappedBoardAtlas(const PaletteSwappedBoardAtlas&) = delete;
     PaletteSwappedBoardAtlas& operator=(const PaletteSwappedBoardAtlas&) = delete;
 
-    [[nodiscard]] SDL_Texture* GetBoardTexture() const { return board_texture_; }
+    [[nodiscard]] ImTextureID GetBoardTexture() const { return static_cast<ImTextureID>(board_texture_); }
 
-    [[nodiscard]] BoardTextureView GetView() const { 
-        return BoardTextureView{ board_texture_, SDL_FRect{ 0.0f, 0.0f, (float)kBoardWidth, (float)kBoardHeight } }; 
+    [[nodiscard]] BoardTextureView GetView() const {
+        return BoardTextureView{ GetBoardTexture(), 0.0f, 0.0f, (float)kBoardWidth, (float)kBoardHeight };
     }
 
 private:
-    SDL_Texture* board_texture_{nullptr};
+    GLuint board_texture_{0};
 };

@@ -3,9 +3,9 @@
 
 class QuipBubble : public BaseBubble {
 public:
-    QuipBubble(const std::string& message) : BaseBubble(message) {}
+    QuipBubble(const std::string& message, std::size_t moveCount = 0) : BaseBubble(message, moveCount) {}
 
-    void Render(const ImVec4& border_color, const ImVec4& background_color, const ImVec4& text_color, ImFont* header_font, std::shared_ptr<SDL_Texture> icon = nullptr) override {
+    void Render(const ImVec4& border_color, const ImVec4& background_color, const ImVec4& text_color, ImFont* header_font, ImTextureID icon = 0) override {
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
 
         const ImU32 bg_u32 = ImGui::ColorConvertFloat4ToU32(background_color);
@@ -24,20 +24,7 @@ public:
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
-        if (header_font) ImGui::PushFont(header_font);
-        ImGui::Text("quip");
-        
-        if (icon) {
-            ImGui::SameLine();
-            const float icon_size = ImGui::GetFontSize();
-            ImGui::Image(
-                static_cast<ImTextureID>(reinterpret_cast<intptr_t>(icon.get())),
-                ImVec2(icon_size, icon_size),
-                ImVec2(0, 0), ImVec2(1, 1),
-                ImVec4(1, 1, 1, 1), ImVec4(0, 0, 0, 0)
-            );
-        }
-        if (header_font) ImGui::PopFont();
+        RenderHeader("Quip", text_color, header_font, icon);
 
         ImGui::TextWrapped("%s", m_Message.c_str());
         

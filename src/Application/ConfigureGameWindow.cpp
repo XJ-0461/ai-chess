@@ -7,18 +7,42 @@
 
 namespace chess::application {
 
-void RenderConfigureGameWindow(bool* show, game::GameConfiguration& config) {
+namespace {
+
+void RenderAgentSection(const char* label, game::AgentConfiguration& agent) {
+    ImGui::SeparatorText(label);
+    ImGui::PushID(label);
+
+    ImGui::InputText("Endpoint", &agent.endpoint);
+
+    static const char* const kProviderLabels[] = { "OpenRouter", "AWS Bedrock" };
+    int provider_index = static_cast<int>(agent.provider);
+    if (ImGui::Combo("Provider", &provider_index, kProviderLabels, IM_ARRAYSIZE(kProviderLabels))) {
+        agent.provider = static_cast<game::AgentProvider>(provider_index);
+    }
+
+    // Paste a model identifier copied from the Model Browser here.
+    ImGui::InputText("Model ID", &agent.model_id);
+
+    ImGui::PopID();
+}
+
+} // namespace
+
+void RenderConfigureGameWindow(
+    bool* show,
+    game::GameConfiguration& config,
+    const std::function<void(const game::GameConfiguration&)>& on_create
+) {
     if (!*show) {
         return;
     }
 
     if (ImGui::Begin("Configure New Game", show)) {
-        ImGui::Text("Agent Endpoints");
-        ImGui::InputText("White Endpoint", &config.white_endpoint);
-        ImGui::InputText("Black Endpoint", &config.black_endpoint);
+        RenderAgentSection("White", config.white);
+        RenderAgentSection("Black", config.black);
 
-        ImGui::Separator();
-        ImGui::Text("Game Rules");
+        ImGui::SeparatorText("Game Rules");
         ImGui::Checkbox("Enable Quips", &config.enable_quip);
         ImGui::Checkbox("Enable Draw Offers", &config.enable_draw_offer);
         ImGui::Checkbox("Enable Resignation", &config.enable_resignation);
@@ -32,11 +56,11 @@ void RenderConfigureGameWindow(bool* show, game::GameConfiguration& config) {
         }
 
         ImGui::Separator();
-        ImGui::BeginDisabled(); // Not hooked up yet
         if (ImGui::Button("Create", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
-            // Future: Spawn actor
+            if (on_create) {
+                on_create(config);
+            }
         }
-        ImGui::EndDisabled();
 
         ImGui::End();
     }

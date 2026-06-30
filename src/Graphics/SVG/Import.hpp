@@ -1,51 +1,59 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <span>
-#include <vector>
 
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 
-#include "Utility/SDL3_STD.hpp"
+#include "Graphics/GLTexture.hpp"
 
 namespace chess::graphics::svg {
 
-inline std::shared_ptr<SDL_Texture> LoadSVGTextureFromMemory(
-    const std::shared_ptr<SDL_Renderer>& renderer,
+// Rasterises an in-memory SVG with SDL_image (CPU surface, no renderer
+// required) and uploads the pixels as a GL texture owned by a GLTexture.
+// Requires a current GL context. Returns nullptr on failure.
+inline std::shared_ptr<GLTexture> LoadSVGTextureFromMemory(
     const std::span<const std::uint8_t>& svg
 ) {
-
-    // 1. Create an SDL_IOStream from the memory buffer
     SDL_IOStream* io = SDL_IOFromConstMem(svg.data(), svg.size_bytes());
     if (!io) {
         SDL_Log("Failed to create IOStream: %s", SDL_GetError());
         return nullptr;
     }
 
-    // 2. Load the SVG into a surface, auto-sizing or explicitly scaling
-    // Note: Pass 0 for width/height to use the SVG's default dimensions
-    SDL_Surface* surface = IMG_LoadSVG_IO(io);
-
-    // The IOStream is no longer needed once the surface is created
+    SDL_Surface* raw_surface = IMG_LoadSVG_IO(io);
     SDL_CloseIO(io);
 
-    if (!surface) {
+    if (!raw_surface) {
         SDL_Log("Failed to load SVG from memory: %s", SDL_GetError());
         return nullptr;
     }
 
-    const std::shared_ptr<SDL_Texture> texture{
-        SDL_CreateTextureFromSurface(renderer.get(), surface),
-        SDLTextureDeleter
-    };
+    // Normalise to a known, tightly described RGBA8 layout before uploading.
+    SDL_Surface* rgba_surface = SDL_ConvertSurface(raw_surface, SDL_PIXELFORMAT_RGBA32);
+    SDL_DestroySurface(raw_surface);
 
-    SDL_DestroySurface(surface);
-
-    if (!texture) {
-        SDL_Log("Failed to create texture from surface: %s", SDL_GetError());
+    if (!rgba_surface) {
+        SDL_Log("Failed to convert SVG surface to RGBA32: %s", SDL_GetError());
+        return nullptr;
     }
 
+    std::shared_ptr<GLTexture> texture;
+    try {
+        texture = std::make_shared<GLTexture>(
+            rgba_surface->pixels,
+            rgba_surface->w,
+            rgba_surface->h,
+            rgba_surface->pitch / 4 // RGBA8: 4 bytes per pixel
+        );
+    } catch (...) {
+        SDL_DestroySurface(rgba_surface);
+        throw;
+    }
+
+    SDL_DestroySurface(rgba_surface);
     return texture;
 }
 

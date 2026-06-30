@@ -52,6 +52,21 @@ private:
 	std::string m_Move;
 };
 
+class InvalidCaptureException : public std::exception {
+public:
+	explicit InvalidCaptureException(std::string move) : m_Move(std::move(move)) {}
+
+	const char* what() const noexcept override {
+		return "Capture notation used but no piece to capture";
+	}
+
+	const std::string& move() const {
+		return m_Move;
+	}
+private:
+	std::string m_Move;
+};
+
 class InvalidFenException : public std::exception {
 public:
 	InvalidFenException() : m_Message("Invalid FEN string!") {}

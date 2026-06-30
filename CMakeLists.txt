@@ -25,11 +25,43 @@ set(SOURCES
     src/Application/GameBrowserWindow.cpp
     "src/Application/AgentChat/AgentSidebar.h"
     "src/Application/AgentChat/AgentSidebar.cpp"
+    "src/Application/AgentChat/AgentSidebarTrajectory.hpp"
     "src/Application/Resources.h"
 
     src/Application/CentralChessboardPanel.h
     src/Application/CentralChessboardPanel.cpp
     src/Application/ThreeColumnGameWindow.hpp
+    src/Application/GameView.h
+    src/Application/GameView.cpp
+    src/Application/Command/Command.hpp
+    src/Application/Command/CommandFile.hpp
+    src/Application/Command/CommandFile.cpp
+    src/Application/Command/ExternalCommandExecutor.hpp
+    src/Game/GameContext.hpp
+    src/Game/GameAudio.hpp
+    src/Game/GameMoveLog.hpp
+    src/Game/GameLifecyclePhase.hpp
+    src/Game/Error/AgentMoveError.hpp
+
+    src/Application/Task/BlockingTask.hpp
+    src/Application/Task/TaskExecutor.hpp
+
+    src/Application/Model/OpenRouterModelDetails.hpp
+    src/Application/Model/AwsBedrockModelDetails.hpp
+    src/Application/Model/ModelBrowserCache.hpp
+    src/Application/Model/ModelBrowserColumns.hpp
+    src/Application/Model/IModelBrowser.hpp
+    src/Application/Model/OpenRouterModelBrowser.hpp
+    src/Application/ModelBrowserWindow.h
+    src/Application/ModelBrowserWindow.cpp
+
+    src/Application/Provider/OpenRouterModelProviderConfiguration.hpp
+    src/Application/Provider/AWSBedrockModelProviderConfiguration.hpp
+    src/Application/Provider/ModelProviderConfiguration.hpp
+    src/Application/ModelProviderConfigurationWindow.h
+    src/Application/ModelProviderConfigurationWindow.cpp
+    src/Application/ProvidersWindow.h
+    src/Application/ProvidersWindow.cpp
 
     src/Application/AgentChat/ChatBubble/BaseBubble.h
     src/Application/AgentChat/ChatBubble/InfoBubble.h
@@ -78,12 +110,26 @@ set(SOURCES
 #    "src/Graphics/VertexArray.cpp"
 
     src/Game/Execution/GameOrchestrator.hpp
+    src/Game/Execution/MatchResult.hpp
+    src/Game/Execution/State.hpp
+    src/Game/Execution/Message/Lifecycle.hpp
+    src/Game/Execution/Message/PlayerAction.hpp
+    src/Game/Execution/Message/MoveValidation.hpp
+    src/Game/Execution/Message/Notification.hpp
+    src/Game/View/InteractionState.hpp
 
     src/Graphics/RGBA.hpp
+    src/Graphics/GLTexture.hpp
     src/Graphics/Board/BoardAtlas.hpp
     src/Graphics/Pieces/PieceAtlas.hpp
+    src/Graphics/Pieces/PieceBorderAtlas.hpp
     src/Graphics/Icon/CheckDoubleSVG.hpp
     src/Graphics/Icon/WarningSVG.hpp
+    src/Graphics/Sound/Confirm01.hpp
+    src/Graphics/Sound/CollectPoint2.hpp
+    src/Graphics/Sound/FireHit01.hpp
+    src/Graphics/Sound/ActivatePower.hpp
+    src/Graphics/Sound/NoEntry.hpp
     src/Graphics/SVG/Import.hpp
 
     src/Graphics/Theme/AgentSidebarColorPalette.hpp
@@ -97,13 +143,22 @@ set(SOURCES
     "src/Utility/FileDialog.h"
     "src/Utility/StringParser.h"
     "src/Utility/Timer.h"
-    "src/Utility/ZMQAgentServer.cpp"
+    "src/Utility/ZMQAgentClient.cpp"
     "src/Utility/GameOrchestrator.cpp"
     "src/Utility/AgentTrajectory.h"
     "src/Utility/GameOrchestrator.h"
-    "src/Utility/ZMQAgentServer.h"
+    "src/Utility/ZMQAgentClient.h"
     "src/Utility/ZMQPairChannel.hpp"
+    "src/Utility/ZMQCommandServer.hpp"
     src/Utility/SDL3_STD.hpp
+
+    src/Utility/Log/Level.hpp
+    src/Utility/Log/MakeLog.hpp
+    src/Utility/Log/Switch.hpp
+
+    src/Telemetry/GauntTelemetry.hpp
+    src/Telemetry/GauntTelemetry.cpp
+    src/Telemetry/GameTelemetry.hpp
 )
 
 if (WIN32)
@@ -134,8 +189,6 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     CXX_STANDARD 26
 )
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE GLFW_INCLUDE_NONE)
-
 target_include_directories(${PROJECT_NAME}
     PRIVATE
     "src/"
@@ -148,7 +201,34 @@ target_compile_options(
     "--embed-dir=${CMAKE_CURRENT_BINARY_DIR}/resources/"
     "--embed-dir=${CMAKE_CURRENT_LIST_DIR}/resources/fonts/pixel_operator/"
     "--embed-dir=${CMAKE_CURRENT_LIST_DIR}/resources/textures/"
+    "--embed-dir=${CMAKE_CURRENT_LIST_DIR}/resources/sounds/"
 )
+
+# Structured trace logging. When enabled, the CHESS_*_TRACE / CHESS_TRACE_LOG
+# macros (src/Utility/Log/Switch.hpp) compile in; otherwise they expand to
+# nothing and cost zero at runtime. Toggle with -DCHESS_ENABLE_TRACE_LOGS=ON,
+# or set CHESS_LOG_LEVEL to one of off/trace/debug/info/warn/error/critical for
+# finer control over which levels are compiled in.
+option(CHESS_ENABLE_TRACE_LOGS "Compile in TRACE-level structured logging" OFF)
+set(CHESS_LOG_LEVEL "" CACHE STRING "Compiled-in log level: off|trace|debug|info|warn|error|critical")
+
+if (CHESS_ENABLE_TRACE_LOGS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_TRACE=ON)
+elseif (CHESS_LOG_LEVEL STREQUAL "off")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_OFF=ON)
+elseif (CHESS_LOG_LEVEL STREQUAL "trace")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_TRACE=ON)
+elseif (CHESS_LOG_LEVEL STREQUAL "debug")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_DEBUG=ON)
+elseif (CHESS_LOG_LEVEL STREQUAL "info")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_INFO=ON)
+elseif (CHESS_LOG_LEVEL STREQUAL "warn")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_WARN=ON)
+elseif (CHESS_LOG_LEVEL STREQUAL "error")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_ERROR=ON)
+elseif (CHESS_LOG_LEVEL STREQUAL "critical")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CHESS_INCLUDE_LOG_LEVEL_CRITICAL=ON)
+endif()
 
 ###############
 # Include tests
@@ -186,7 +266,7 @@ cool_vcpkg_SetUpVcpkg(
 cool_vcpkg_DeclarePackage(NAME nlohmann-json)
 cool_vcpkg_DeclarePackage(NAME cppzmq)
 cool_vcpkg_DeclarePackage(NAME concurrentqueue)
-cool_vcpkg_DeclarePackage(NAME sdl3 VERSION "3.4.10#1" FEATURES wayland x11 vulkan)
+cool_vcpkg_DeclarePackage(NAME sdl3 VERSION "3.4.10#1" FEATURES wayland x11 vulkan alsa)
 cool_vcpkg_DeclarePackage(NAME sdl3-image VERSION "3.4.4#0" FEATURES png webp jpeg)
 cool_vcpkg_DeclarePackage(NAME sdl3-mixer VERSION "3.2.4#0" FEATURES wavpack)
 cool_vcpkg_DeclarePackage(NAME imgui VERSION "1.92.8#0"
@@ -194,6 +274,12 @@ cool_vcpkg_DeclarePackage(NAME imgui VERSION "1.92.8#0"
 )
 cool_vcpkg_DeclarePackage(NAME sobjectizer VERSION "5.8.5.1#0")
 cool_vcpkg_DeclarePackage(NAME cpr VERSION "1.14.2#0")
+cool_vcpkg_DeclarePackage(NAME spdlog)
+cool_vcpkg_DeclarePackage(NAME xerces-c)
+cool_vcpkg_DeclarePackage(NAME cnats)
+cool_vcpkg_DeclarePackage(NAME tiny-process-library)
+cool_vcpkg_DeclarePackage(NAME gtest)
+cool_vcpkg_DeclarePackage(NAME openssl)
 
 cool_vcpkg_InstallPackages()
 
@@ -202,8 +288,24 @@ find_package(cppzmq CONFIG REQUIRED)
 find_package(concurrentqueue CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(SDL3_image CONFIG REQUIRED)
+find_package(SDL3_mixer CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(SObjectizer CONFIG REQUIRED)
+find_package(OpenGL REQUIRED)
+find_package(cpr CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+#find_package(XercesC REQUIRED)
+#find_package(OpenSSL REQUIRED)
+#find_package(cnats CONFIG REQUIRED)
+find_package(tiny-process-library CONFIG REQUIRED)
+find_package(GTest CONFIG REQUIRED)
+
+# --- Gaunt Telemetry ---
+include(cmake/handle-dependencies.cmake)
+HandleDependency_NatsCxxWrapper(GIT_TAG master)
+HandleDependency_GauntCore(GIT_TAG 31eb7d6357dbea4bc63e572d0f16ecc43949bf7d)
+
+add_subdirectory(external/gaunt-generated-chess_coliseum-cpp)
 
 function(Chess_GenerateRGBA)
     set(oneValueArgs PNG_PATH OUTPUT_PATH)
@@ -247,23 +349,20 @@ Chess_GenerateRGBA(
     OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/resources/Board.rgba"
 )
 
-# GLFW
-set(BUILD_SHARED_LIBS OFF)
-set(GLFW_BUILD_EXAMPLES OFF)
-set(GLFW_BUILD_TESTS OFF)
-set(GLFW_BUILD_DOCS OFF)
-set(GLFW_INSTALL OFF)
-
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
     imgui::imgui
-    ${OPENGL_LIBRARY}
+    OpenGL::GL
     nlohmann_json::nlohmann_json
     cppzmq-static
     concurrentqueue::concurrentqueue
     SDL3::SDL3
     SDL3_image::SDL3_image-static
+    SDL3_mixer::SDL3_mixer-static
     sobjectizer::StaticLib
+    cpr::cpr
+    spdlog::spdlog
+    gaunt::generated::chess_coliseum-cpp
 )
 

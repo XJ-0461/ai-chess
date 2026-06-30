@@ -1,0 +1,15 @@
+module Tristan.Community.ChessColiseum.Event;
+
+import Tristan.Community.ChessColiseum.Type.Color;
+
+obj ResignationSubmitted is Event {
+    meta {
+        let String NormalName = "Resignation Submitted";
+        let Int32 Id = 1207;
+        let Array[String, 1] NormalFieldNames = Array[String, 1].new("Player");
+    }
+
+    fields {
+        let Color player = Color.new(0);
+    }
+}

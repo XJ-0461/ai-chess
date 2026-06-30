@@ -2,13 +2,23 @@
 
 #include <Windows.h>
 
-#include <GLFW/glfw3.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
+#include <SDL3/SDL.h>
 
 #include "Application/Application.h"
 
 namespace FileDialog {
+
+	namespace {
+		// Retrieve the native Win32 window handle backing the SDL window.
+		HWND NativeWindowHandle() {
+			SDL_Window* const window = Application::Get().GetWindow();
+			return static_cast<HWND>(SDL_GetPointerProperty(
+				SDL_GetWindowProperties(window),
+				SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+				nullptr
+			));
+		}
+	}
 
 	std::string Open() {
 		OPENFILENAMEA ofn;

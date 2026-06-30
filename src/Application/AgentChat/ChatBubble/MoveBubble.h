@@ -1,7 +1,10 @@
 #pragma once
+
+#include <vector>
+
 #include "BaseBubble.h"
 #include "Utility/AgentTrajectory.h"
-#include <optional>
+#include "Game/Error/AgentMoveError.hpp"
 
 class MoveBubble : public BaseBubble {
 public:
@@ -9,10 +12,11 @@ public:
     explicit MoveBubble(
         const std::string& message,
         const MoveVerificationState state = MoveVerificationState::Unverified,
-        std::optional<std::string> errorMsg = std::nullopt
-    ) : BaseBubble(message), m_State(state), m_ErrorMsg(std::move(errorMsg)) {}
+        std::vector<chess::game::error::MoveError> errors = {},
+        std::size_t moveCount = 0
+    ) : BaseBubble(message, moveCount), m_State(state), m_Errors(std::move(errors)) {}
 
-    void Render(const ImVec4& border_color, const ImVec4& background_color, const ImVec4& text_color, ImFont* header_font, std::shared_ptr<SDL_Texture> icon = nullptr) override {
+    void Render(const ImVec4& border_color, const ImVec4& background_color, const ImVec4& text_color, ImFont* header_font, ImTextureID icon = 0) override {
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10.0f);
 
         const ImU32 bg_u32 = ImGui::ColorConvertFloat4ToU32(background_color);
@@ -31,31 +35,24 @@ public:
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
-        if (header_font) {
-            ImGui::PushFont(header_font);
-        }
-        ImGui::Text("move");
-        if (icon) {
-            ImGui::SameLine();
-            const float icon_size = ImGui::GetFontSize();
-            ImGui::Image(
-                static_cast<ImTextureID>(reinterpret_cast<intptr_t>(icon.get())),
-                ImVec2(icon_size, icon_size),
-                ImVec2(0, 0), ImVec2(1, 1),
-                text_color,
-                ImVec4(0, 0, 0, 0)
-            );
-        }
-        if (header_font) {
-            ImGui::PopFont();
+        RenderHeader("Move", text_color, header_font, icon);
+
+        // The move itself (e.g. "Ra6").
+        ImGui::TextWrapped("%s", m_Message.c_str());
+
+        // On error, a horizontal rule separates the move from the codified
+        // error(s); each error shows its CODE in the header font followed by a
+        // concise description.
+        if (m_State == MoveVerificationState::Error && !m_Errors.empty()) {
+            ImGui::NewLine();
+            for (const auto& error : m_Errors) {
+                if (header_font) ImGui::PushFont(header_font);
+                ImGui::TextWrapped("%s", error.code.c_str());
+                if (header_font) ImGui::PopFont();
+                ImGui::TextWrapped("%s", error.description.c_str());
+            }
         }
 
-        std::string display_message = m_Message;
-        if (m_State == MoveVerificationState::Error && m_ErrorMsg) {
-            display_message += "\nError: " + *m_ErrorMsg;
-        }
-        ImGui::TextWrapped("%s", display_message.c_str());
-        
         ImGui::PopStyleColor();
         ImGui::EndGroup();
 
@@ -73,5 +70,5 @@ public:
     }
 private:
     MoveVerificationState m_State;
-    std::optional<std::string> m_ErrorMsg;
+    std::vector<chess::game::error::MoveError> m_Errors;
 };

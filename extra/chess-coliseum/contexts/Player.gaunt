@@ -1,0 +1,22 @@
+module Tristan.Community.ChessColiseum.Context;
+
+import Tristan.Community.ChessColiseum.Type.Color;
+import Tristan.Community.ChessColiseum.Event.PlayerStart;
+import Tristan.Community.ChessColiseum.Event.PlayerEnd;
+import Tristan.Community.ChessColiseum.Event.OfferDraw;
+import Tristan.Community.ChessColiseum.Event.AcceptDraw;
+import Tristan.Community.ChessColiseum.Event.DeclineDraw;
+import Tristan.Community.ChessColiseum.Event.SubmitResignation;
+import Tristan.Community.ChessColiseum.Context.Move;
+
+obj Player is Context {
+    meta {
+        let String NormalName = "Player";
+        let Int32 Id = 1302;
+        let Type Key = Tuple[Color];
+        let Type BeginEvent = PlayerStart;
+        let Type EndEvent = PlayerEnd;
+        let Type Events = TypeSet[OfferDraw, AcceptDraw, DeclineDraw, SubmitResignation];
+        let Type Children = TypeSet[Move];
+    }
+}

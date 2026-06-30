@@ -4,10 +4,6 @@
 
 #ifdef _WIN32
 
-#include <GLFW/glfw3.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
-
 #include <Windows.h>
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
@@ -19,7 +15,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         app->Run();
     }
     catch (std::exception& e) {
-        MessageBox(glfwGetWin32Window(app->GetGLFWWindow()), e.what(), NULL, MB_OK | MB_ICONERROR);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Chess", e.what(), app->GetWindow());
     }
     delete app;
 
@@ -42,6 +38,12 @@ int main(int argc, char** argv) {
             args.blackEndpoint = argv[++i];
         } else if (arg == "--retrospective-rounds" && i + 1 < argc) {
             args.retrospectiveRounds = std::stoul(argv[++i]);
+        } else if (arg == "--commands" && i + 1 < argc) {
+            args.commandFilePath = argv[++i];
+        } else if (arg == "--command-server-endpoint" && i + 1 < argc) {
+            args.commandServerEndpoint = argv[++i];
+        } else if (arg == "--gaunt-telemetry-xml-output-file" && i + 1 < argc) {
+            args.gauntTelemetryXmlOutputFile = argv[++i];
         }
     }
 

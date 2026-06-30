@@ -12,6 +12,7 @@ export class OpenRouterClient {
   private conversationStore = new Map<string, ConversationState>();
   private conversationId = "chess-match";
   private response_id = 0;
+  private quip_counter = 0;  // Unique counter for quip IDs within a response
   private lastRequestTime = 0;
 
   constructor(apiKey: string, modelName: string) {
@@ -44,7 +45,13 @@ export class OpenRouterClient {
       Spontaneous: Quips sound offhand and unrehearsed, even if they are actually well-timed,
       Brief: Unlike a traditional joke with a setup and a punchline, a quip is a quick zinger,
       Humorous or Taunting: While often used for harmless comedic effect, a quip can sometimes carry a bitingly sarcastic or mocking edge.
+      Directed: Toward the opponent to invoke a reaction.
       Quips must be maximum 200 characters. The opponent can see your quips.
+      A quip is not:
+      Narration: simply describing the move that was made on the board, the board is open for all to see.
+      Exposition: describing the thought process of a move, and revealing insight into why a move was made.
+      Commentary: on one's own thought process.
+      Declaration: of one's own move.
     `;
 
   /**
@@ -83,6 +90,7 @@ export class OpenRouterClient {
   public async getNextMove(
     gameHistory: string[],
     opponentQuips: string[],
+    ownQuipHistory: string[],
     color: "WHITE" | "BLACK",
     previousErrors: string[],
     personality: string,
@@ -176,7 +184,8 @@ export class OpenRouterClient {
         message: z.string().max(200).describe("The quip message (max 200 chars)"),
       }),
       execute: async ({ message }) => {
-        const quip_id = `${this.conversationId}-${this.response_id}-quip`;
+        this.quip_counter = this.quip_counter + 1;
+        const quip_id = `${this.conversationId}-${this.response_id}-quip-${this.quip_counter}`;
         await onQuip(message, quip_id);
         return { success: true, message };
       },
@@ -221,7 +230,7 @@ export class OpenRouterClient {
       ${enableDrawOffer ? "- You may use \`offer_draw\` to propose a draw (once per turn)." : ""}
       ${enableResignation ? "- You may use \`resign\` to forfeit the match." : ""}
 
-      ${enableQuip ? "You can optionally use the \`quip\` tool to taunt or boast before making your move. " + this.quipDescription : ""}
+      ${enableQuip ? "QUIPPING IS ENCOURAGED: Use the \`quip\` tool frequently (roughly every few turns) to taunt, boast, or react to the game. Quips make the match entertaining for spectators. Don't hold back—if you have something witty to say, say it! " + this.quipDescription : ""}
       
       Begin by explaining your strategy and reasoning. 
       IMPORTANT: State your final move clearly in natural language at the end of your reasoning, then call the \`make_move\` tool with that exact move. 
@@ -235,10 +244,14 @@ export class OpenRouterClient {
       ? `\nOpponent quips: ${opponentQuips.map(q => `"${q}"`).join(", ")}\n`
       : "";
 
+    const ownQuipsText = ownQuipHistory.length > 0
+      ? `\nYour previous quips (do NOT repeat these): ${ownQuipHistory.map(q => `"${q}"`).join(", ")}\n`
+      : "";
+
     const userPrompt = `History: ${historyText}
 Turn: ${turnNumber}
 Current Turn: ${color}
-${errorText}${quipsText}
+${errorText}${quipsText}${ownQuipsText}
 Decide your move, explain why, and then call \`make_move\`. Alternatively, call \`offer_draw\` or \`resign\` if applicable.`;
 
     const generateMovePromise = async (): Promise<{ type: "move"; move: string } | { type: "offer_draw" } | { type: "resign" }> => {
@@ -337,6 +350,7 @@ return await generateMovePromise();
 public async getDrawDecision(
 gameHistory: string[],
 opponentQuips: string[],
+ownQuipHistory: string[],
 personality: string,
 onReasoning: (delta: string, id: string) => Promise<void> | void,
 onResponse: (delta: string, id: string) => Promise<void> | void
@@ -415,6 +429,7 @@ return accepted;
   public async getRetrospectiveQuips(
     gameHistory: string[],
     opponentQuips: string[],
+    ownQuipHistory: string[],
     winner: string,
     cause: string,
     personality: string,
@@ -434,7 +449,8 @@ return accepted;
         message: z.string().max(200).describe("The quip message (max 200 chars)"),
       }),
       execute: async ({ message }) => {
-        const quip_id = `${this.conversationId}-${this.response_id}-quip`;
+        this.quip_counter++;
+        const quip_id = `${this.conversationId}-${this.response_id}-quip-${this.quip_counter}`;
         await onQuip(message, quip_id);
         return { success: true, message };
       },
@@ -463,11 +479,15 @@ return accepted;
       ? `\nOpponent's recent quips:\n${opponentQuips.map(q => `"${q}"`).join("\n")}\n`
       : "";
 
+    const ownQuipsText = ownQuipHistory.length > 0
+      ? `\nYour previous quips (do NOT repeat these):\n${ownQuipHistory.map(q => `"${q}"`).join("\n")}\n`
+      : "";
+
     const userPrompt = `Final Game History:
 ${historyText}
 
 Result: ${winner} won by ${cause}.
-${quipsText}
+${quipsText}${ownQuipsText}
 Please analyze the game and provide your retrospective quips, then call \`end_turn\`.`;
 
     await this.enforceRateLimit();

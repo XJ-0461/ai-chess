@@ -4,10 +4,10 @@
 class InfoBubble : public BaseBubble {
 public:
 
-    explicit InfoBubble(const std::string& message, const bool isError = false)
-        : BaseBubble(message), m_IsError(isError) {}
+    explicit InfoBubble(const std::string& message, const bool isError = false, std::size_t moveCount = 0)
+        : BaseBubble(message, moveCount), m_IsError(isError) {}
 
-    void Render(const ImVec4& border_color, const ImVec4& background_color, const ImVec4& text_color, ImFont* header_font, const std::shared_ptr<SDL_Texture> icon = nullptr) override {
+    void Render(const ImVec4& border_color, const ImVec4& background_color, const ImVec4& text_color, ImFont* header_font, const ImTextureID icon = 0) override {
         const ImU32 bg_u32 = ImGui::ColorConvertFloat4ToU32(background_color);
         const ImU32 border_u32 = ImGui::ColorConvertFloat4ToU32(border_color);
 
@@ -24,23 +24,26 @@ public:
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
 
-        if (header_font) ImGui::PushFont(header_font);
-        ImGui::Text("%s", m_IsError ? "error" : "info");
-        
-        if (icon) {
-            ImGui::SameLine();
-            const float icon_size = ImGui::GetFontSize();
-            ImGui::Image(
-                static_cast<ImTextureID>(reinterpret_cast<intptr_t>(icon.get())),
-                ImVec2(icon_size, icon_size),
-                ImVec2(0, 0), ImVec2(1, 1),
-                ImVec4(1, 1, 1, 1), ImVec4(0, 0, 0, 0)
-            );
-        }
-        if (header_font) ImGui::PopFont();
+        RenderHeader(m_IsError ? "Error" : "Info", text_color, header_font, icon);
 
-        ImGui::TextWrapped("%s", m_Message.c_str());
-        
+        // For errors formatted as "CODE - description", parse and display like MoveBubble.
+        if (m_IsError) {
+            const std::size_t separator_pos = m_Message.find(" - ");
+            if (separator_pos != std::string::npos) {
+                const std::string code = m_Message.substr(0, separator_pos);
+                const std::string description = m_Message.substr(separator_pos + 3);
+
+                if (header_font) ImGui::PushFont(header_font);
+                ImGui::TextUnformatted(code.c_str());
+                if (header_font) ImGui::PopFont();
+                ImGui::TextWrapped("%s", description.c_str());
+            } else {
+                ImGui::TextWrapped("%s", m_Message.c_str());
+            }
+        } else {
+            ImGui::TextWrapped("%s", m_Message.c_str());
+        }
+
         ImGui::PopStyleColor();
         ImGui::EndGroup();
 

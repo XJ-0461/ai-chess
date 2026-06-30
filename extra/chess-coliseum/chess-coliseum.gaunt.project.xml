@@ -1,0 +1,36 @@
+<Package>
+
+    <Name value="Chess Coliseum" />
+    <Version value="0.1.0" />
+    <BaseModule identifier="Tristan.Community.ChessColiseum" />
+    <SDK identifier="Gaunt" version="0.1.0" />
+
+    <Files>
+        <File relativePath="contexts/Player.gaunt" />
+        <File relativePath="contexts/Game.gaunt" />
+        <File relativePath="contexts/Move.gaunt" />
+
+        <File relativePath="events/player/PlayerStart.gaunt" />
+        <File relativePath="events/player/PlayerEnd.gaunt" />
+        <File relativePath="events/player/MakeMove.gaunt" />
+        <File relativePath="events/player/OfferDraw.gaunt" />
+        <File relativePath="events/player/AcceptDraw.gaunt" />
+        <File relativePath="events/player/DeclineDraw.gaunt" />
+        <File relativePath="events/player/SubmitResignation.gaunt" />
+        <File relativePath="events/game/GameBegin.gaunt" />
+        <File relativePath="events/game/GameEnd.gaunt" />
+        <File relativePath="events/game/MoveBegin.gaunt" />
+        <File relativePath="events/game/MoveEnd.gaunt" />
+        <File relativePath="events/game/MoveSubmitted.gaunt" />
+        <File relativePath="events/game/DrawAccepted.gaunt" />
+        <File relativePath="events/game/ResignationSubmitted.gaunt" />
+
+        <File relativePath="types/Color.gaunt" />
+
+    </Files>
+
+    <Imports>
+        <Import package="Gaunt.Common" />
+    </Imports>
+
+</Package>

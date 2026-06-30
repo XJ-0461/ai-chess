@@ -1,0 +1,8 @@
+module Tristan.Community.ChessColiseum.Event;
+
+obj DeclineDraw is Event {
+    meta {
+        let String NormalName = "Decline Draw";
+        let Int32 Id = 1106;
+    }
+}

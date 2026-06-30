@@ -1,0 +1,8 @@
+module Tristan.Community.ChessColiseum.Event;
+
+obj SubmitResignation is Event {
+    meta {
+        let String NormalName = "Submit Resignation";
+        let Int32 Id = 1107;
+    }
+}

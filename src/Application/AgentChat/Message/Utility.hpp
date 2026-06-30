@@ -9,6 +9,7 @@ struct GameHistory {
     static constexpr const char* kTypeTag = "game_history";
     std::vector<std::string> game_history;
     std::vector<std::string> opponent_quips;
+    std::vector<std::string> own_quip_history;
     std::string personality;
 };
 
@@ -17,6 +18,7 @@ inline void to_json(nlohmann::json& j, const GameHistory& m) {
         {"type", GameHistory::kTypeTag},
         {"game_history", m.game_history},
         {"opponent_quips", m.opponent_quips},
+        {"own_quip_history", m.own_quip_history},
         {"personality", m.personality}
     };
 }
@@ -39,6 +41,7 @@ struct ErrorRecoveryRequest {
     static constexpr const char* kTypeTag = "error_recovery";
     std::vector<std::string> game_history;
     std::vector<std::string> opponent_quips;
+    std::vector<std::string> own_quip_history;
     std::vector<std::string> errors;
     std::string personality;
 };
@@ -48,6 +51,7 @@ inline void to_json(nlohmann::json& j, const ErrorRecoveryRequest& m) {
         {"type", ErrorRecoveryRequest::kTypeTag},
         {"game_history", m.game_history},
         {"opponent_quips", m.opponent_quips},
+        {"own_quip_history", m.own_quip_history},
         {"errors", m.errors},
         {"personality", m.personality}
     };
@@ -57,6 +61,7 @@ struct RetrospectiveRequest {
     static constexpr const char* kTypeTag = "retrospective_request";
     std::vector<std::string> game_history;
     std::vector<std::string> opponent_quips;
+    std::vector<std::string> own_quip_history;
     std::string winner;
     std::string cause;
     std::string personality;
@@ -67,6 +72,7 @@ inline void to_json(nlohmann::json& j, const RetrospectiveRequest& m) {
         {"type", RetrospectiveRequest::kTypeTag},
         {"game_history", m.game_history},
         {"opponent_quips", m.opponent_quips},
+        {"own_quip_history", m.own_quip_history},
         {"winner", m.winner},
         {"cause", m.cause},
         {"personality", m.personality}

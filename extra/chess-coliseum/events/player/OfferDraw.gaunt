@@ -1,0 +1,8 @@
+module Tristan.Community.ChessColiseum.Event;
+
+obj OfferDraw is Event {
+    meta {
+        let String NormalName = "Offer Draw";
+        let Int32 Id = 1104;
+    }
+}

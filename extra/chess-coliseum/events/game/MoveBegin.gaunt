@@ -1,0 +1,8 @@
+module Tristan.Community.ChessColiseum.Event;
+
+obj MoveBegin is Event {
+    meta {
+        let String NormalName = "Move Begin";
+        let Int32 Id = 1203;
+    }
+}

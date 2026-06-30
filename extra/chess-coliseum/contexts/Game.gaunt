@@ -1,0 +1,19 @@
+module Tristan.Community.ChessColiseum.Context;
+
+import Tristan.Community.ChessColiseum.Event.GameBegin;
+import Tristan.Community.ChessColiseum.Event.GameEnd;
+import Tristan.Community.ChessColiseum.Event.DrawAccepted;
+import Tristan.Community.ChessColiseum.Event.ResignationSubmitted;
+import Tristan.Community.ChessColiseum.Context.Move;
+
+obj Game is Context {
+    meta {
+        let String NormalName = "Game";
+        let Int32 Id = 1303;
+        let Type Key = Tuple[String];
+        let Type BeginEvent = GameBegin;
+        let Type EndEvent = GameEnd;
+        let Type Events = TypeSet[DrawAccepted, ResignationSubmitted];
+        let Type Children = TypeSet[Move];
+    }
+}

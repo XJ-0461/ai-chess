@@ -82,8 +82,10 @@ AlgebraicMove::AlgebraicMove(std::string_view str) {
 		Destination = ToSquare(file, rank);
 
 		// Capture
-		if (*fromBack == 'x')
+		if (*fromBack == 'x') {
+			Flags |= MoveFlag::Capture;
 			fromBack--;
+		}
 
 		// The only thing left is the square specifier
 		// N'b'd4, N'3'd4, or N'b3'd4

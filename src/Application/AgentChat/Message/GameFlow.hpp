@@ -9,6 +9,7 @@ struct StartMoveRequest {
     static constexpr const char* kTypeTag = "start_move";
     std::vector<std::string> game_history;
     std::vector<std::string> opponent_quips;
+    std::vector<std::string> own_quip_history;
     std::string personality;
     uint32_t turn_number;
 };
@@ -18,6 +19,7 @@ inline void to_json(nlohmann::json& j, const StartMoveRequest& m) {
         {"type", StartMoveRequest::kTypeTag},
         {"game_history", m.game_history},
         {"opponent_quips", m.opponent_quips},
+        {"own_quip_history", m.own_quip_history},
         {"personality", m.personality},
         {"turn_number", m.turn_number}
     };
@@ -48,6 +50,7 @@ struct DrawOfferRequest {
     static constexpr const char* kTypeTag = "draw_offer";
     std::vector<std::string> game_history;
     std::vector<std::string> opponent_quips;
+    std::vector<std::string> own_quip_history;
     std::string personality;
 };
 
@@ -56,6 +59,7 @@ inline void to_json(nlohmann::json& j, const DrawOfferRequest& m) {
         {"type", DrawOfferRequest::kTypeTag},
         {"game_history", m.game_history},
         {"opponent_quips", m.opponent_quips},
+        {"own_quip_history", m.own_quip_history},
         {"personality", m.personality}
     };
 }
@@ -73,6 +77,7 @@ struct DrawOfferDeclinedRequest {
     static constexpr const char* kTypeTag = "draw_declined";
     std::vector<std::string> game_history;
     std::vector<std::string> opponent_quips;
+    std::vector<std::string> own_quip_history;
     std::string personality;
 };
 
@@ -81,6 +86,7 @@ inline void to_json(nlohmann::json& j, const DrawOfferDeclinedRequest& m) {
         {"type", DrawOfferDeclinedRequest::kTypeTag},
         {"game_history", m.game_history},
         {"opponent_quips", m.opponent_quips},
+        {"own_quip_history", m.own_quip_history},
         {"personality", m.personality}
     };
 }

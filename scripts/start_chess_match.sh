@@ -41,6 +41,8 @@ RETROSPECTIVE_ROUNDS=0
 OPENROUTER_API_KEY=""
 CHESS_SERVER=""
 CHESS_AGENT_CLIENT=""
+GAUNT_TELEMETRY_XML_OUTPUT_FILE=""
+COMMANDS_FILE=""
 
 # Print usage instructions
 print_usage() {
@@ -54,6 +56,7 @@ print_usage() {
     echo "  --openrouter-api-key <KEY>          OpenRouter API key"
     echo "  --chess-server <FILEPATH>           Path to the Chess server executable"
     echo "  --chess-agent-client <FILEPATH>     Path to the chess-agent client (TypeScript or JavaScript)"
+    echo "  --gaunt-telemetry-xml-output-file <PATH>  Write Gaunt telemetry XML stream to this file (optional)"
     echo "  -h, --help                          Show this help message"
 }
 
@@ -90,6 +93,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --chess-agent-client)
             CHESS_AGENT_CLIENT="$2"
+            shift 2
+            ;;
+        --gaunt-telemetry-xml-output-file)
+            GAUNT_TELEMETRY_XML_OUTPUT_FILE="$2"
             shift 2
             ;;
         -h|--help)
@@ -144,52 +151,115 @@ cleanup() {
             wait "$pid" 2>/dev/null || true
         fi
     done
+    if [[ -n "$COMMANDS_FILE" && -f "$COMMANDS_FILE" ]]; then
+        rm -f "$COMMANDS_FILE"
+    fi
     exit "$exit_status"
 }
 
 # Trap exit signals for proper cleanup of background jobs
 trap cleanup EXIT INT TERM
 
-# Start White Agent
-echo "[start_chess_match] Starting White Agent client..."
+# Start White Agent (it binds its port and waits for the setup command, which
+# now carries provider/model/credentials).
+echo "[start_chess_match] Starting White Agent client (waiting for setup)..."
 if [[ "$CHESS_AGENT_CLIENT" == *.ts ]]; then
     npx ts-node "$CHESS_AGENT_CLIENT" \
-        --model "$WHITE_MODEL" \
         --name "White Agent" \
-        --endpoint "tcp://127.0.0.1:$WHITE_PORT" \
-        --openrouter-api-key "$OPENROUTER_API_KEY" &
+        --endpoint "tcp://127.0.0.1:$WHITE_PORT" &
     AGENT_PIDS+=($!)
 else
     node "$CHESS_AGENT_CLIENT" \
-        --model "$WHITE_MODEL" \
         --name "White Agent" \
-        --endpoint "tcp://127.0.0.1:$WHITE_PORT" \
-        --openrouter-api-key "$OPENROUTER_API_KEY" &
+        --endpoint "tcp://127.0.0.1:$WHITE_PORT" &
     AGENT_PIDS+=($!)
 fi
 
 # Start Black Agent
-echo "[start_chess_match] Starting Black Agent client..."
+echo "[start_chess_match] Starting Black Agent client (waiting for setup)..."
 if [[ "$CHESS_AGENT_CLIENT" == *.ts ]]; then
     npx ts-node "$CHESS_AGENT_CLIENT" \
-        --model "$BLACK_MODEL" \
         --name "Black Agent" \
-        --endpoint "tcp://127.0.0.1:$BLACK_PORT" \
-        --openrouter-api-key "$OPENROUTER_API_KEY" &
+        --endpoint "tcp://127.0.0.1:$BLACK_PORT" &
     AGENT_PIDS+=($!)
 else
     node "$CHESS_AGENT_CLIENT" \
-        --model "$BLACK_MODEL" \
         --name "Black Agent" \
-        --endpoint "tcp://127.0.0.1:$BLACK_PORT" \
-        --openrouter-api-key "$OPENROUTER_API_KEY" &
+        --endpoint "tcp://127.0.0.1:$BLACK_PORT" &
     AGENT_PIDS+=($!)
 fi
 
 # Briefly wait for background agents to spin up
 sleep 1.5
 
-# Run Chess server in the foreground
-echo "[start_chess_match] Launching Chess Server..."
+# Generate a startup command file: configure the OpenRouter provider, configure
+# the game (per-color provider/model/endpoint), then start it. The Chess app
+# runs these sequentially at startup.
+GAME_ID="match"
+COMMANDS_FILE="$(mktemp /tmp/chess-commands.XXXXXX.json)"
+cat > "$COMMANDS_FILE" <<EOF
+{
+  "commands": [
+    {
+      "type": "configure_provider",
+      "detail": { "name": "openrouter", "kind": "OpenRouter", "api_key": "$OPENROUTER_API_KEY" }
+    },
+    {
+      "type": "configure_game",
+      "detail": {
+        "game_id": "$GAME_ID",
+        "white": { "endpoint": "tcp://127.0.0.1:$WHITE_PORT", "provider": "OpenRouter", "model_id": "$WHITE_MODEL" },
+        "black": { "endpoint": "tcp://127.0.0.1:$BLACK_PORT", "provider": "OpenRouter", "model_id": "$BLACK_MODEL" },
+        "enable_quip": true,
+        "enable_draw_offer": true,
+        "enable_resignation": true,
+        "retrospective_turn_count": $RETROSPECTIVE_ROUNDS
+      }
+    },
+    {
+      "type": "open_spectator_view",
+      "detail": {
+        "game_id": "$GAME_ID",
+        "game_view_theme": "default",
+        "window_configuration": {
+          "type": "floating",
+          "window_size": {
+            "width": 1920,
+            "height": 1080
+          },
+          "window_position": {
+            "x": 0,
+            "y": 0
+          },
+          "imgui_flags": [
+            "ImGuiWindowFlags_NoTitleBar"
+          ]
+        }
+      }
+    },
+    {
+      "type": "spectator_view::set_move_history_bar",
+      "detail": {
+        "window_id": "Spectator 1 - $GAME_ID",
+        "enable_move_history_bar": true
+      }
+    },
+    {
+      "type": "start_game",
+      "detail": { "game_id": "$GAME_ID" }
+    }
+  ]
+}
+EOF
+
+# Run Chess in the foreground, driving configuration/start from the command file.
+echo "[start_chess_match] Launching Chess with command file $COMMANDS_FILE..."
 chmod +x "$CHESS_SERVER"
-"$CHESS_SERVER" --retrospective-rounds $RETROSPECTIVE_ROUNDS --white-endpoint "tcp://127.0.0.1:$WHITE_PORT" --black-endpoint "tcp://127.0.0.1:$BLACK_PORT"
+
+# Assemble the Chess server arguments, appending the optional telemetry flag.
+CHESS_SERVER_ARGS=(--commands "$COMMANDS_FILE")
+if [[ -n "$GAUNT_TELEMETRY_XML_OUTPUT_FILE" ]]; then
+    CHESS_SERVER_ARGS+=(--gaunt-telemetry-xml-output-file "$GAUNT_TELEMETRY_XML_OUTPUT_FILE")
+fi
+
+"$CHESS_SERVER" "${CHESS_SERVER_ARGS[@]}"
