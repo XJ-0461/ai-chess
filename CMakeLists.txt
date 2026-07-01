@@ -351,6 +351,62 @@ Chess_GenerateRGBA(
     OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/resources/Board.rgba"
 )
 
+# The .wav sound assets are intentionally not tracked in git. When they are
+# missing (e.g. a fresh clone), generate a silent, zero-length WAV placeholder
+# in their place so the #embed directives in src/Graphics/Sound/ still resolve
+# and the project builds. Real assets, once present, are left untouched.
+function(Chess_CreatePlaceholderWavResourceIfNotExists)
+    set(oneValueArgs PATH)
+    cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
+
+    if(NOT ARG_PATH)
+        message(FATAL_ERROR "Chess_CreatePlaceholderWavResourceIfNotExists: PATH is required")
+    endif()
+
+    if(EXISTS "${ARG_PATH}")
+        return()
+    endif()
+
+    find_program(_ffmpeg_exe NAMES ffmpeg)
+
+    if(NOT _ffmpeg_exe)
+        message(FATAL_ERROR "ffmpeg not found; cannot generate placeholder WAV '${ARG_PATH}'. Install ffmpeg or supply the real sound asset.")
+    endif()
+
+    get_filename_component(_placeholder_dir "${ARG_PATH}" DIRECTORY)
+    file(MAKE_DIRECTORY "${_placeholder_dir}")
+
+    message(STATUS "${ARG_PATH} not found - generating placeholder .wav file")
+    execute_process(
+        COMMAND "${_ffmpeg_exe}"
+            -hide_banner -loglevel error
+            -f lavfi -i anullsrc=r=44100:cl=mono -t 0
+            -c:a pcm_s16le -y "${ARG_PATH}"
+        RESULT_VARIABLE _ffmpeg_result
+        ERROR_VARIABLE _ffmpeg_error
+    )
+
+    if(NOT _ffmpeg_result EQUAL 0)
+        message(FATAL_ERROR "ffmpeg failed to generate placeholder WAV '${ARG_PATH}':\n${_ffmpeg_error}")
+    endif()
+
+    message(STATUS "Created placeholder WAV resource: ${ARG_PATH}")
+endfunction()
+
+set(_chess_wav_resource_files
+    "Activate_Power.wav"
+    "Collect_Point_2.wav"
+    "Confirm_01.wav"
+    "Fire_Hit_01.wav"
+    "No_Entry.wav"
+)
+
+foreach(_wav_file IN LISTS _chess_wav_resource_files)
+    Chess_CreatePlaceholderWavResourceIfNotExists(
+        PATH "${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds/${_wav_file}"
+    )
+endforeach()
+
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE
