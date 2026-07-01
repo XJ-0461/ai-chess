@@ -3,7 +3,8 @@ module Tristan.Community.ChessColiseum.Context;
 import Tristan.Community.ChessColiseum.Event.MoveBegin;
 import Tristan.Community.ChessColiseum.Event.MoveEnd;
 import Tristan.Community.ChessColiseum.Event.MoveSubmitted;
-import Tristan.Community.ChessColiseum.Event.MakeMove;
+import Tristan.Community.ChessColiseum.Event.SubmitValidMove;
+import Tristan.Community.ChessColiseum.Event.SubmitInvalidMove;
 
 obj Move is Context {
     meta {
@@ -12,7 +13,7 @@ obj Move is Context {
         let Type Key = Tuple[UInt32];
         let Type BeginEvent = MoveBegin;
         let Type EndEvent = MoveEnd;
-        let Type Events = TypeSet[MoveSubmitted, MakeMove];
+        let Type Events = TypeSet[SubmitValidMove, SubmitInvalidMove];
         let Type Children = TypeSet[];
     }
 }

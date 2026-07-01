@@ -1,0 +1,13 @@
+module Tristan.Community.ChessColiseum.Event;
+
+obj SubmitValidMove is Event {
+    meta {
+        let String NormalName = "Submit Valid Move";
+        let Int32 Id = 1108;
+        let Array[String, 1] NormalFieldNames = Array[String, 1].new("Long Algebraic Notation");
+    }
+
+    fields {
+        let String long_algebraic_notation = "";
+    }
+}

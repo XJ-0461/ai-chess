@@ -10,18 +10,21 @@
 
 namespace chess::game::error {
 
-inline constexpr auto kErrorMissingMakeMove        = "ERROR_MISSING_MAKE_MOVE";
-inline constexpr auto kErrorIllegalMove            = "ERROR_ILLEGAL_MOVE";
-inline constexpr auto kErrorAmbiguousMove          = "ERROR_AMBIGUOUS_MOVE";
-inline constexpr auto kErrorInvalidNotation        = "ERROR_INVALID_NOTATION";
-inline constexpr auto kErrorMissingCheckSymbol     = "ERROR_MISSING_CHECK_SYMBOL";
-inline constexpr auto kErrorMissingCheckmateSymbol = "ERROR_MISSING_CHECKMATE_SYMBOL";
-inline constexpr auto kErrorInvalidCheckClaim      = "ERROR_INVALID_CHECK_CLAIM";
-inline constexpr auto kErrorInvalidCheckmateClaim  = "ERROR_INVALID_CHECKMATE_CLAIM";
-inline constexpr auto kErrorInvalidCaptureNotation = "ERROR_INVALID_CAPTURE_NOTATION";
-inline constexpr auto kErrorMoveNotApplied         = "ERROR_MOVE_NOT_APPLIED";
-inline constexpr auto kErrorAgentTimeout           = "ERROR_AGENT_TIMEOUT";
-inline constexpr auto kErrorAgentFailure           = "ERROR_AGENT_FAILURE";
+inline constexpr auto kErrorMissingMakeMove                = "ERROR_MISSING_MAKE_MOVE";
+inline constexpr auto kErrorIllegalMove                    = "ERROR_ILLEGAL_MOVE";
+inline constexpr auto kErrorAmbiguousMove                  = "ERROR_AMBIGUOUS_MOVE";
+inline constexpr auto kErrorInvalidNotation                = "ERROR_INVALID_NOTATION";
+inline constexpr auto kErrorMalformedLongAlgebraicNotation = "ERROR_MALFORMED_LONG_ALGEBRAIC_NOTATION";
+inline constexpr auto kErrorMissingCheckSymbol             = "ERROR_MISSING_CHECK_SYMBOL";
+inline constexpr auto kErrorMissingCheckmateSymbol         = "ERROR_MISSING_CHECKMATE_SYMBOL";
+inline constexpr auto kErrorInvalidCheckClaim              = "ERROR_INVALID_CHECK_CLAIM";
+inline constexpr auto kErrorInvalidCheckmateClaim          = "ERROR_INVALID_CHECKMATE_CLAIM";
+inline constexpr auto kErrorInvalidCaptureNotation         = "ERROR_INVALID_CAPTURE_NOTATION";
+inline constexpr auto kErrorMissingCaptureSymbol           = "ERROR_MISSING_CAPTURE_SYMBOL";
+inline constexpr auto kErrorPieceMismatch                  = "ERROR_PIECE_MISMATCH";
+inline constexpr auto kErrorMoveNotApplied                 = "ERROR_MOVE_NOT_APPLIED";
+inline constexpr auto kErrorAgentTimeout                   = "ERROR_AGENT_TIMEOUT";
+inline constexpr auto kErrorAgentFailure                   = "ERROR_AGENT_FAILURE";
 
 // A single codified error.
 struct MoveError {
@@ -63,8 +66,24 @@ struct InvalidNotation : MoveErrorException {
             move_input + " is not valid algebraic notation."}) {}
 };
 
-// Defined for completeness; detection requires SAN-suffix validation in the
-// engine and is wired opportunistically.
+// The move string could not be parsed as Long Algebraic Notation at all (e.g.
+// SAN was submitted, the separator/squares are malformed). Purely notational.
+struct MalformedLongAlgebraicNotation : MoveErrorException {
+    explicit MalformedLongAlgebraicNotation(const std::string& move_input)
+        : MoveErrorException({kErrorMalformedLongAlgebraicNotation,
+            move_input + " is not valid long algebraic notation."}) {}
+};
+
+// The piece letter in the notation disagrees with the piece actually standing on
+// the source square (e.g. "Ng1-f3" when g1 holds a bishop).
+struct PieceMismatch : MoveErrorException {
+    explicit PieceMismatch(const std::string& move_input)
+        : MoveErrorException({kErrorPieceMismatch,
+            "Move " + move_input + " names a piece that is not on the source square."}) {}
+};
+
+// Strict LAN suffix/separator enforcement: the move's claimed +/#/x must match the
+// board's computed flags, so every accepted move string is canonical.
 struct MissingCheckSymbol : MoveErrorException {
     MissingCheckSymbol()
         : MoveErrorException({kErrorMissingCheckSymbol,
@@ -93,6 +112,12 @@ struct InvalidCaptureNotation : MoveErrorException {
     explicit InvalidCaptureNotation(const std::string& move_input)
         : MoveErrorException({kErrorInvalidCaptureNotation,
             "Move " + move_input + " uses capture notation 'x' but there is no piece to capture."}) {}
+};
+
+struct MissingCaptureSymbol : MoveErrorException {
+    explicit MissingCaptureSymbol(const std::string& move_input)
+        : MoveErrorException({kErrorMissingCaptureSymbol,
+            "Move " + move_input + " captures a piece but uses '-' instead of 'x'."}) {}
 };
 
 // Classifies an engine IllegalMoveException into the right codified error,

@@ -85,7 +85,7 @@ void ZMQAgentClient::HandleMessage(const nlohmann::json& j) {
         auto m = j.get<message::MoveResponse>();
         m_Trajectory->AddEvent(MoveEvent{m});
         std::lock_guard<std::mutex> lock(m_MoveDecisionsMtx);
-        m_MoveDecisions.push(m.algebraic_move_string);
+        m_MoveDecisions.push(m.long_algebraic_move_string);
     } else if (type == message::ResignResponse::kTypeTag) {
         m_Trajectory->SetState(AgentState::Idle);
         m_Trajectory->AddEvent(InfoEvent{"Agent resigned"});

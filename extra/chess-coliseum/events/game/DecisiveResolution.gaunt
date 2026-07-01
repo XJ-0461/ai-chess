@@ -1,0 +1,17 @@
+module Tristan.Community.ChessColiseum.Event;
+
+import Tristan.Community.ChessColiseum.Type.DecisiveKind;
+import Tristan.Community.ChessColiseum.Type.Color;
+
+obj DecisiveResolution is Event {
+    meta {
+        let String NormalName = "Decisive Resolution";
+        let Int32 Id = 1210;
+        let Array[String, 2] NormalFieldNames = Array[String, 2].new("Decisive Kind", "Winner");
+    }
+
+    fields {
+        let DecisiveKind decisive_kind = DecisiveKind.default();
+        let Color winner = Color.default();
+    }
+}

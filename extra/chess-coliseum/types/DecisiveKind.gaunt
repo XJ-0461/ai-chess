@@ -1,0 +1,31 @@
+module Tristan.Community.ChessColiseum.Type;
+
+obj DecisiveKind is Enum {
+
+    meta {
+        let String NormalName = "Decisive Kind";
+        let Int32 Id = 1005;
+        let Array[String, 3] NormalFieldNames = Array[String, 3].new(
+            "Checkmate",
+            "Resignation",
+            "Time"
+        );
+    }
+
+    fields {
+        let UInt64 value = 0;
+        let UInt64 Checkmate = 0;
+        let UInt64 Resignation = 1;
+        let UInt64 Time = 2;
+    }
+
+    functions {
+
+        fn new(UInt64 ordinal) -> DecisiveKind {
+            this.value = ordinal;
+            return this;
+        }
+
+    }
+
+}

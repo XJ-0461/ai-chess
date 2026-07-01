@@ -1,0 +1,15 @@
+module Tristan.Community.ChessColiseum.Event;
+
+import Tristan.Community.ChessColiseum.Type.DrawKind;
+
+obj DrawResolution is Event {
+    meta {
+        let String NormalName = "Draw Resolution";
+        let Int32 Id = 1209;
+        let Array[String, 1] NormalFieldNames = Array[String, 1].new("Draw Kind");
+    }
+
+    fields {
+        let DrawKind draw_kind = DrawKind.default();
+    }
+}

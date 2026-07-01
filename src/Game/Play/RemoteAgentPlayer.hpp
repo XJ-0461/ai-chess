@@ -272,7 +272,7 @@ private:
             // GameMoveLog outcome for this move attempt.
             const std::string move_id = chess::util::RandomAlphaString(8);
             trajectory_->AddEvent(chess::agent::MoveEvent{m}, move_id);
-            so_5::send<execution::PlayerMoveAction>(orchestrator_mbox_, colour_, m.algebraic_move_string, move_id);
+            so_5::send<execution::PlayerMoveAction>(orchestrator_mbox_, colour_, m.long_algebraic_move_string, move_id);
             so_5::send<execution::PlayerYield>(orchestrator_mbox_);
             return true;
         }

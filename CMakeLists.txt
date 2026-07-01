@@ -76,6 +76,8 @@ set(SOURCES
     src/Application/AgentChat/Message/Utility.hpp
 
     "src/Chess/AlgebraicMove.cpp"
+    "src/Chess/LongAlgebraicNotation.hpp"
+    "src/Chess/LongAlgebraicNotation.cpp"
     "src/Chess/BitBoard.h"
     "src/Chess/Board.h"
     "src/Chess/Board.cpp"

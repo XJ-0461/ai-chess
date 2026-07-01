@@ -218,7 +218,7 @@ void CentralChessboardPanel::RenderMoveHistoryBar(float height) {
     if (!m_MoveLog) {
         return;
     }
-    const std::vector<std::string> moves = m_MoveLog->AcceptedSan();
+    const std::vector<std::string> moves = m_MoveLog->AcceptedMoves();
 
     // Horizontal scrollbar only (one row of move-pair bubbles, grows left->right).
     if (ImGui::BeginChild("MoveHistoryBar", ImVec2(0.0f, height), ImGuiChildFlags_None,

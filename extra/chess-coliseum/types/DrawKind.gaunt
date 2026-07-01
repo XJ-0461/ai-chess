@@ -1,0 +1,31 @@
+module Tristan.Community.ChessColiseum.Type;
+
+obj DrawKind is Enum {
+
+    meta {
+        let String NormalName = "Draw Kind";
+        let Int32 Id = 1004;
+        let Array[String, 3] NormalFieldNames = Array[String, 3].new(
+            "Stalemate",
+            "Agreement",
+            "Move Rule"
+        );
+    }
+
+    fields {
+        let UInt64 value = 0;
+        let UInt64 Stalemate = 0;
+        let UInt64 Agreement = 1;
+        let UInt64 MoveRule = 2;
+    }
+
+    functions {
+
+        fn new(UInt64 ordinal) -> DrawKind {
+            this.value = ordinal;
+            return this;
+        }
+
+    }
+
+}

@@ -30,6 +30,12 @@ public:
     [[nodiscard]] bool Open() {
         try {
             socket_ = zmq::socket_t(context_, zmq::socket_type::pair);
+            // Bound every blocking socket call so a dead/unresponsive agent can
+            // never wedge a request thread (which would, in turn, block the actor
+            // environment's join on shutdown and keep the process alive).
+            // linger 0: closing the socket drops unsent frames instead of waiting.
+            socket_.set(zmq::sockopt::linger, 0);
+            socket_.set(zmq::sockopt::sndtimeo, static_cast<int>(kSendTimeout.count()));
             socket_.connect(endpoint_);
             open_ = true;
             return true;
@@ -90,6 +96,10 @@ public:
     }
 
 private:
+    // Upper bound on a blocking send to a healthy local agent (sends are normally
+    // instant); a finite value guarantees a request thread can never hang here.
+    static constexpr auto kSendTimeout = std::chrono::milliseconds(2000);
+
     std::string endpoint_;
     zmq::context_t context_{1};
     zmq::socket_t socket_{};

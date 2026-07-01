@@ -14,7 +14,7 @@ namespace chess::game {
 struct MoveOutcome {
     std::string id;        // correlation id, shared with the trajectory entry
     Colour color{White};
-    std::string san;       // the submitted move string
+    std::string long_algebraic_notation;       // the submitted move string (Long Algebraic Notation)
     bool accepted{false};  // true if it was legal and applied to the board
     std::vector<error::MoveError> errors; // codified reasons it was rejected
 };
@@ -41,12 +41,13 @@ public:
     }
 
     // Accepted moves in play order — the move-history bar source.
-    [[nodiscard]] std::vector<std::string> AcceptedSan() const {
+    [[nodiscard]]
+    std::vector<std::string> AcceptedMoves() const {
         const std::lock_guard<std::mutex> lock(mtx_);
         std::vector<std::string> result;
         for (const auto& outcome : outcomes_) {
             if (outcome.accepted) {
-                result.push_back(outcome.san);
+                result.push_back(outcome.long_algebraic_notation);
             }
         }
         return result;

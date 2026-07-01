@@ -14,7 +14,7 @@ namespace chess::game::execution {
 
 struct PlayerMoveAction {
     Colour color;
-    std::string algebraic_move_string{};
+    std::string long_algebraic_move_string{};
     std::string id{}; // correlation id, shared with the trajectory entry + move log
 };
 

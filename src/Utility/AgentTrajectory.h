@@ -150,7 +150,7 @@ struct AgentTrajectory {
         std::lock_guard<std::mutex> lock(mtx);
         for (auto it = events.rbegin(); it != events.rend(); ++it) {
             if (auto* p = std::get_if<chess::agent::MoveEvent>(&it->event)) {
-                if (p->response.algebraic_move_string == moveStr) {
+                if (p->response.long_algebraic_move_string == moveStr) {
                     p->verificationState = MoveVerificationState::Error;
                     p->errorMessage = errorMsg;
                     break;
@@ -163,7 +163,7 @@ struct AgentTrajectory {
         std::lock_guard<std::mutex> lock(mtx);
         for (auto it = events.rbegin(); it != events.rend(); ++it) {
             if (auto* p = std::get_if<chess::agent::MoveEvent>(&it->event)) {
-                if (p->response.algebraic_move_string == moveStr) {
+                if (p->response.long_algebraic_move_string == moveStr) {
                     p->verificationState = MoveVerificationState::Verified;
                     break;
                 }

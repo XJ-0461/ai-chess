@@ -92,7 +92,7 @@ private:
     static void Hydrate(SidebarBubble& bubble, const chess::agent::MoveEvent& event,
                         const std::shared_ptr<chess::game::GameMoveLog>& move_log) {
         bubble.kind = SidebarBubbleKind::Move;
-        bubble.text = event.response.algebraic_move_string;
+        bubble.text = event.response.long_algebraic_move_string;
         // Hydrate verification + codified errors from the move log (game context).
         if (move_log) {
             if (const auto outcome = move_log->Find(bubble.id)) {

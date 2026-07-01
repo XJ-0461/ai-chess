@@ -1,0 +1,8 @@
+module Tristan.Community.ChessColiseum.Event;
+
+obj NoContestResolution is Event {
+    meta {
+        let String NormalName = "No Contest Resolution";
+        let Int32 Id = 1208;
+    }
+}

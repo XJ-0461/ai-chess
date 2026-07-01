@@ -322,7 +322,7 @@ async function main() {
 
       if (result.type === "move") {
         console.log(`[${name}] Generated move decision: ${result.move}`);
-        await safeSend({ type: "move_decision", algebraic_move_string: result.move });
+        await safeSend({ type: "move_decision", long_algebraic_move_string: result.move });
       } else if (result.type === "offer_draw") {
         console.log(`[${name}] Offering draw`);
         await safeSend({ type: "offer_draw" });

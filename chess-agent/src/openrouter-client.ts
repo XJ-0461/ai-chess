@@ -109,13 +109,13 @@ export class OpenRouterClient {
     // and create-headless-agent/references/tools.md (Default-ON Tools section)
     const makeMoveTool = tool({
       name: "make_move",
-      description: "Submit your chosen next move in algebraic notation.",
+      description: "Submit your chosen next move in Long Algebraic Notation (LAN).",
       inputSchema: z.object({
-        algebraic_move_string: z.string().describe("The algebraic chess move, e.g. 'e4', 'Nf3', 'O-O', 'exd5', 'Qxd4+', 'e8=Q'"),
+        long_algebraic_move_string: z.string().describe("The move in Long Algebraic Notation, e.g. 'e2-e4', 'Ng1-f3', 'O-O', 'O-O-O', 'e4xd5', 'Nd4xc6', 'e7-e8=Q', 'Qd1xh5+', 'Ra1-a8#'"),
       }),
-      execute: async ({ algebraic_move_string }) => {
-        decision = { type: "move", move: algebraic_move_string };
-        return { success: true, move: algebraic_move_string };
+      execute: async ({ long_algebraic_move_string }) => {
+        decision = { type: "move", move: long_algebraic_move_string };
+        return { success: true, move: long_algebraic_move_string };
       },
     });
 
@@ -139,41 +139,44 @@ export class OpenRouterClient {
       },
     });
 
-    const makeAlgebraicNotationTool = tool({
-      name: "make_algebraic_notation",
-      description: "Helper to format standard algebraic notation. Returns the formatted string. Use this if unsure about formatting.",
+    const makeLongAlgebraicNotationTool = tool({
+      name: "make_long_algebraic_notation",
+      description: "Helper to format a move in Long Algebraic Notation (LAN). Returns the formatted string. Use this if unsure about formatting.",
       inputSchema: z.object({
         piece_type: z.enum(["K", "Q", "R", "B", "N", "", "P"]).describe("The piece letter. Empty string or 'P' for pawns."),
-        from_coordinate: z.string().describe("The starting square (e.g., 'e2'), or just the file ('e')/rank ('2') for partial disambiguation. For pawn captures, MUST include the file (e.g. 'e'). Empty string if no disambiguation needed."),
-        to_coordinate: z.string().describe("The destination square, e.g., 'e4'."),
+        from_square: z.string().describe("The FULL origin square, e.g. 'e2' or 'g1'. Always required — LAN is fully disambiguated. Ignored for castling."),
+        to_square: z.string().describe("The destination square, e.g. 'e4'. Ignored for castling."),
         is_capture: z.boolean(),
         is_check: z.boolean(),
         is_checkmate: z.boolean(),
+        is_castle_kingside: z.boolean().optional().describe("True for kingside castling (O-O)."),
+        is_castle_queenside: z.boolean().optional().describe("True for queenside castling (O-O-O)."),
         promotion: z.enum(["Q", "R", "B", "N", ""]).optional().describe("Piece to promote to, if applicable."),
       }),
       execute: async (args) => {
-        let san = "";
-        const isPawn = args.piece_type === "" || args.piece_type === "P";
-        
-        if (isPawn) {
-          if (args.is_capture) {
-            san = (args.from_coordinate.charAt(0) || "") + "x" + args.to_coordinate;
-          } else {
-            san = args.to_coordinate;
-          }
-          if (args.promotion) {
-            san += "=" + args.promotion;
-          }
+        let lan = "";
+
+        if (args.is_castle_kingside) {
+          lan = "O-O";
+        } else if (args.is_castle_queenside) {
+          lan = "O-O-O";
         } else {
-          san = args.piece_type + args.from_coordinate;
-          if (args.is_capture) san += "x";
-          san += args.to_coordinate;
+          const isPawn = args.piece_type === "" || args.piece_type === "P";
+          const prefix = isPawn ? "" : args.piece_type;
+          const separator = args.is_capture ? "x" : "-";
+          lan = prefix + args.from_square + separator + args.to_square;
+          if (args.promotion) {
+            lan += "=" + args.promotion;
+          }
         }
 
-        if (args.is_checkmate) san += "#";
-        else if (args.is_check) san += "+";
+        if (args.is_checkmate) {
+            lan += "#";
+        } else if (args.is_check) {
+            lan += "+";
+        }
 
-        return { success: true, formatted_notation: san };
+        return { success: true, formatted_notation: lan };
       },
     });
 
@@ -220,12 +223,14 @@ export class OpenRouterClient {
       Your absolute priority is to decide the next best legal chess move and submit it using the \`make_move\` tool. 
       You are FORBIDDEN from passing your turn. You MUST call the \`make_move\` tool.
 
-      Chess Rules:
-      - Use standard algebraic notation (e.g., e4, Nf3, O-O, exd5, e8=Q).
-      - Captures MUST use 'x' (e.g., Bxe5).
-      - Promotion MUST use '=' (e.g., a8=Q).
-      - Disambiguate if needed (e.g., Nbd2, R1e2).
-      - Use \`make_algebraic_notation\` tool if you need help formatting the string.
+      Chess Rules — submit every move in Long Algebraic Notation (LAN):
+      - Pawns: full origin and destination joined by a hyphen, e.g. e2-e4. Captures use 'x', e.g. e4xd5.
+      - Pieces: capital letter prefix K/Q/R/B/N, then the FULL origin square, hyphen, destination, e.g. Ng1-f3. Captures use 'x', e.g. Nd4xc6.
+      - Promotion: append '=' and the piece letter, e.g. e7-e8=Q or e7xd8=Q.
+      - Castling: O-O (kingside) or O-O-O (queenside).
+      - Check: append '+'. Checkmate: append '#'. A mating move uses '#' only (never '+').
+      - The 'x' capture marker and the '+'/'#' check/mate markers are REQUIRED and must be accurate, or the move will be REJECTED and you must resubmit.
+      - Use \`make_long_algebraic_notation\` tool if you need help formatting the string.
       - Use \`fetch_board_state\` if you are confused or recovering from an error.
       ${enableDrawOffer ? "- You may use \`offer_draw\` to propose a draw (once per turn)." : ""}
       ${enableResignation ? "- You may use \`resign\` to forfeit the match." : ""}
@@ -258,7 +263,7 @@ Decide your move, explain why, and then call \`make_move\`. Alternatively, call 
       const maxRetries = 3;
       let lastApiError: any = null;
 
-      const activeTools: any[] = [makeMoveTool, fetchBoardStateTool, makeAlgebraicNotationTool];
+      const activeTools: any[] = [makeMoveTool, fetchBoardStateTool, makeLongAlgebraicNotationTool];
       if (enableQuip) activeTools.push(quipTool);
       if (enableDrawOffer) activeTools.push(offerDrawTool);
       if (enableResignation) activeTools.push(resignTool);

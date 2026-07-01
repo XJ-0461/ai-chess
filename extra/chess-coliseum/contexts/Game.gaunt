@@ -4,6 +4,9 @@ import Tristan.Community.ChessColiseum.Event.GameBegin;
 import Tristan.Community.ChessColiseum.Event.GameEnd;
 import Tristan.Community.ChessColiseum.Event.DrawAccepted;
 import Tristan.Community.ChessColiseum.Event.ResignationSubmitted;
+import Tristan.Community.ChessColiseum.Event.NoContestResolution;
+import Tristan.Community.ChessColiseum.Event.DrawResolution;
+import Tristan.Community.ChessColiseum.Event.DecisiveResolution;
 import Tristan.Community.ChessColiseum.Context.Move;
 
 obj Game is Context {
@@ -13,7 +16,7 @@ obj Game is Context {
         let Type Key = Tuple[String];
         let Type BeginEvent = GameBegin;
         let Type EndEvent = GameEnd;
-        let Type Events = TypeSet[DrawAccepted, ResignationSubmitted];
+        let Type Events = TypeSet[DrawAccepted, ResignationSubmitted, NoContestResolution, DrawResolution, DecisiveResolution];
         let Type Children = TypeSet[Move];
     }
 }

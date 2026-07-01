@@ -27,11 +27,11 @@ inline void to_json(nlohmann::json& j, const StartMoveRequest& m) {
 
 struct MoveResponse {
     static constexpr const char* kTypeTag = "move_decision";
-    std::string algebraic_move_string;
+    std::string long_algebraic_move_string;
 };
 
 inline void from_json(const nlohmann::json& j, MoveResponse& m) {
-    m.algebraic_move_string = j.value("algebraic_move_string", "");
+    m.long_algebraic_move_string = j.value("long_algebraic_move_string", "");
 }
 
 struct ResignResponse {

@@ -1,0 +1,16 @@
+module Tristan.Community.ChessColiseum.Event;
+
+import Tristan.Community.ChessColiseum.Type.MoveInputError;
+
+obj SubmitInvalidMove is Event {
+    meta {
+        let String NormalName = "Submit Invalid Move";
+        let Int32 Id = 1109;
+        let Array[String, 2] NormalFieldNames = Array[String, 2].new("Long Algebraic Notation", "Move Input Error");
+    }
+
+    fields {
+        let String long_algebraic_notation = "";
+        let MoveInputError move_input_error = MoveInputError.default();
+    }
+}

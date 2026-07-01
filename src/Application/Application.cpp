@@ -212,20 +212,46 @@ Application::Application(uint32_t width, uint32_t height, const std::string& nam
 }
 
 Application::~Application() {
-    // Shutdown Gaunt telemetry first (before any other cleanup)
+    // Tear down in dependency order: every thread that PRODUCES telemetry must be
+    // fully stopped before the telemetry contexts it writes to are destroyed, and
+    // the actor environment must be explicitly stopped so the process can exit
+    // once the window closes (otherwise its threads keep the process alive).
+
+    // 1. Stop accepting external commands (joins the ZMQ ROUTER server thread).
+    if (m_CommandServer) {
+        m_CommandServer->Stop();
+        m_CommandServer.reset();
+    }
+
+    // 2. Stop the running analysis engine, if any (joins its I/O thread).
+    if (m_RunningEngine) {
+        m_RunningEngine->Stop();
+        m_RunningEngine.reset();
+    }
+
+    // 3. Drop the games + views, then stop the actor environment. This joins the
+    //    orchestrator, TaskExecutor and per-player request threads — the
+    //    producers of telemetry — so nothing can emit after this returns.
+    //    (m_GameViews own per-view GL atlases; freed here while the context is
+    //    still current.)
+    m_GameViews.clear();
+    m_Games.clear();
+    if (m_GameOrchestrationEnvironment) {
+        m_GameOrchestrationEnvironment->stop();
+        m_GameOrchestrationEnvironment->join();
+        m_GameOrchestrationEnvironment.reset();
+    }
+
+    // 4. Now that no thread can write telemetry, shut it down.
     if (m_GauntContextHandles) {
         chess::telemetry::ShutdownGauntTelemetry(*m_GauntContextHandles);
         m_GauntContextHandles.reset();
     }
 
-    // GL textures must be deleted while their context is still current, so
-    // release every owner before shutting the backend and context down.
-    m_GameViews.clear();      // per-view atlases
+    // 5. GL / audio / SDL teardown. GL textures must be released while their
+    //    context is still current; per-game MIX mixers (GameAudio dtors ran in
+    //    m_Games.clear() above) are gone before SDL_mixer is torn down.
     m_TextureResources = {};  // shared icon textures
-
-    // Destroy per-game mixers (GameAudio dtors → MIX_DestroyMixer) on the main
-    // thread before tearing SDL_mixer down.
-    m_Games.clear();
     if (m_AudioAvailable) {
         MIX_Quit();
     }
@@ -589,17 +615,17 @@ void Application::RenderImGui() {
         [this](const chess::game::GameConfiguration& config) { CreateGame(config); });
 
     const chess::application::GameBrowserCallbacks game_browser_callbacks{
-        .on_play = [this](const std::string& id) {
+        .on_play = [this](const std::string& id) -> void {
             const auto context = FindGame(id);
             if (context) {
                 so_5::send<chess::game::execution::StartGame>(context->command_mbox);
             }
         },
-        .on_open_spectator = [this](const std::string& id) {
-            OpenSpectatorView(id, chess::application::GameViewTheme::Default);
+        .on_open_spectator = [this](const std::string& id) -> SpectatorViewResult {
+            return OpenSpectatorView(id, chess::application::GameViewTheme::Default);
         },
-        .on_open_spectator_high_contrast = [this](const std::string& id) {
-            OpenSpectatorView(id, chess::application::GameViewTheme::HighContrast);
+        .on_open_spectator_high_contrast = [this](const std::string& id) -> SpectatorViewResult {
+            return OpenSpectatorView(id, chess::application::GameViewTheme::HighContrast);
         },
     };
 
@@ -873,8 +899,8 @@ void Application::UpdateGameAudio() {
 
                 // Accepted move: determine highest priority sound.
                 // Check for checkmate first (highest priority).
-                const bool is_checkmate = !outcome.san.empty() && outcome.san.back() == '#';
-                const bool is_check = !outcome.san.empty() && outcome.san.back() == '+';
+                const bool is_checkmate = !outcome.long_algebraic_notation.empty() && outcome.long_algebraic_notation.back() == '#';
+                const bool is_check = !outcome.long_algebraic_notation.empty() && outcome.long_algebraic_notation.back() == '+';
                 const bool is_queen_capture = queen_captures > state.queen_capture_count;
                 const bool is_capture = all_captures.size() > state.capture_count;
 

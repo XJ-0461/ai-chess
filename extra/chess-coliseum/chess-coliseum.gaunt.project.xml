@@ -9,10 +9,12 @@
         <File relativePath="contexts/Player.gaunt" />
         <File relativePath="contexts/Game.gaunt" />
         <File relativePath="contexts/Move.gaunt" />
+        <File relativePath="contexts/Session.gaunt" />
 
         <File relativePath="events/player/PlayerStart.gaunt" />
         <File relativePath="events/player/PlayerEnd.gaunt" />
-        <File relativePath="events/player/MakeMove.gaunt" />
+        <File relativePath="events/player/SubmitValidMove.gaunt" />
+        <File relativePath="events/player/SubmitInvalidMove.gaunt" />
         <File relativePath="events/player/OfferDraw.gaunt" />
         <File relativePath="events/player/AcceptDraw.gaunt" />
         <File relativePath="events/player/DeclineDraw.gaunt" />
@@ -24,8 +26,15 @@
         <File relativePath="events/game/MoveSubmitted.gaunt" />
         <File relativePath="events/game/DrawAccepted.gaunt" />
         <File relativePath="events/game/ResignationSubmitted.gaunt" />
+        <File relativePath="events/game/NoContestResolution.gaunt" />
+        <File relativePath="events/game/DrawResolution.gaunt" />
+        <File relativePath="events/game/DecisiveResolution.gaunt" />
 
         <File relativePath="types/Color.gaunt" />
+        <File relativePath="types/MoveInputError.gaunt" />
+        <File relativePath="types/GameResolution.gaunt" />
+        <File relativePath="types/DrawKind.gaunt" />
+        <File relativePath="types/DecisiveKind.gaunt" />
 
     </Files>
 

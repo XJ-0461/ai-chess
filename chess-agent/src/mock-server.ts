@@ -37,7 +37,7 @@ async function runMockServer() {
       process.stdout.write(`[Response Stream] ${message.message}\n`);
     }
     else if (message.type === "move_decision") {
-      console.log(`[MockServer] Move Decision Received: ${message.algebraic_move_string}`);
+      console.log(`[MockServer] Move Decision Received: ${message.long_algebraic_move_string}`);
       console.log("[MockServer] Sending EndGame...");
       await socket.send(JSON.stringify({ 
         type: "end_game", 

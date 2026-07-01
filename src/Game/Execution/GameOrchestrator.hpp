@@ -13,6 +13,7 @@
 #include "Chess/Board.h"
 #include "Chess/Move.h"
 #include "Chess/ChessException.h"
+#include "Chess/LongAlgebraicNotation.hpp"
 #include "Game/Error/AgentMoveError.hpp"
 #include "Game/Play/IPlayer.hpp"
 #include "Game/Play/RemoteAgentPlayer.hpp"
@@ -29,6 +30,8 @@
 #include "Utility/Log/Switch.hpp"
 
 namespace chess::game::execution {
+
+namespace ggcc = gaunt::generated::chess_coliseum;
 
 class GameOrchestrator : public so_5::agent_t {
 public:
@@ -50,7 +53,11 @@ protected:
 
     void so_define_agent() override {
 
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "so_define_agent"}, {"game_id", game_id_});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "so_define_agent"},
+            {"game_id", game_id_}
+        );
 
         game_state_events_ = so_environment().create_mbox("GameOrchestrator.StateChange");
 
@@ -187,7 +194,12 @@ private:
     // Publishes the current state both as an event (for mbox subscribers) and
     // into the shared phase sink (for pollers like the UI command runner).
     void PublishStateChange() {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "publish_state"}, {"function", "PublishStateChange"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "publish_state"},
+            {"function", "PublishStateChange"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         so_5::send<GameStateChanged>(game_state_events_, game_id_, so_current_state().query_name());
         if (state_.published_phase) {
             state_.published_phase->store(CurrentPhase());
@@ -208,37 +220,34 @@ private:
         if (state_.black_trajectory) {
             state_.black_trajectory->SetResultScore(ScoreString(result.outcome, Black));
         }
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "finalize_result"}, {"function", "FinalizeResult"}, {"game_id", game_id_}, {"outcome", std::string(OutcomeToString(result.outcome))}, {"cause", result.cause});
-
-        // End player and game telemetry contexts
-        if (state_.gaunt_context) {
-            namespace ggcc = gaunt::generated::chess_coliseum;
-
-            if (state_.gaunt_context->white_player.player_context.has_value()) {
-                state_.gaunt_context->white_player.player_context->Accept(ggcc::event::PlayerEnd{});
-                state_.gaunt_context->white_player.player_context.reset();
-            }
-            if (state_.gaunt_context->black_player.player_context.has_value()) {
-                state_.gaunt_context->black_player.player_context->Accept(ggcc::event::PlayerEnd{});
-                state_.gaunt_context->black_player.player_context.reset();
-            }
-
-            if (state_.gaunt_context->game_context.has_value()) {
-                state_.gaunt_context->game_context->Accept(ggcc::event::GameEnd{});
-                state_.gaunt_context->game_context.reset();
-            }
-        }
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "finalize_result"},
+            {"function", "FinalizeResult"},
+            {"game_id", game_id_},
+            {"outcome", std::string(OutcomeToString(result.outcome))},
+            {"cause", result.cause}
+        );
     }
 
     void OnGameConfiguration(const mhood_t<GameConfiguration> config) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnGameConfiguration"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnGameConfiguration"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         state_.game_configuration = *config;
         so_change_state(configured);
         PublishStateChange();
     }
 
     void OnBeginSetup(const mhood_t<BeginSetupRequest>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnBeginSetup"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnBeginSetup"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         // Keep the board injected at construction (shared with views); only
         // create one if none was provided.
         if (!state_.game_state.board) {
@@ -287,7 +296,12 @@ private:
     }
 
     void OnCheckSetup(const mhood_t<CheckSetup>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnCheckSetup"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnCheckSetup"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         const bool setup_is_valid =
             (state_.players.white != nullptr) &&
             (state_.players.black != nullptr) &&
@@ -299,7 +313,12 @@ private:
     }
 
     void OnAttachPlayer(const mhood_t<AttachPlayer> message) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnAttachPlayer"}, {"game_id", game_id_}, {"colour", message->colour == White ? "white" : "black"});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnAttachPlayer"},
+            {"game_id", game_id_},
+            {"colour", message->colour == White ? "white" : "black"}
+        );
         if (message->colour == White) {
             state_.players.white = message->player;
         } else {
@@ -308,7 +327,6 @@ private:
 
         // Emit player start telemetry
         if (state_.gaunt_context && state_.gaunt_context->game_context.has_value()) {
-            namespace ggcc = gaunt::generated::chess_coliseum;
             auto& player_ctx = (message->colour == White)
                 ? state_.gaunt_context->white_player
                 : state_.gaunt_context->black_player;
@@ -325,7 +343,12 @@ private:
     }
 
     void OnStartGame(const mhood_t<StartGame>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnStartGame"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnStartGame"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         // Enter white_turn explicitly: relying on in_progress's initial substate
         // is fragile, and if the current state reads as "in_progress" then
         // OnBeginTurn's fallback would (incorrectly) pick black. White moves first.
@@ -350,13 +373,17 @@ private:
 
     // signal the player's subsystem to begin their turn
     void OnBeginTurn(const mhood_t<BeginTurn>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnBeginTurn"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnBeginTurn"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         std::shared_ptr<IPlayer> player = so_is_active_state(white_turn) ? state_.players.white : state_.players.black;
         const TurnContext context = MakeTurnContext();
 
         // Create Move telemetry context
         if (state_.gaunt_context) {
-            namespace ggcc = gaunt::generated::chess_coliseum;
             auto& player_ctx = so_is_active_state(white_turn)
                 ? state_.gaunt_context->white_player
                 : state_.gaunt_context->black_player;
@@ -386,21 +413,87 @@ private:
     // this is when we want to kick it back to the same player because a recoverable error happened during their turn
     // we dont want to increment the game state or anything here, just ask them to retry
     void OnBeginErrorRecoveryTurn(const mhood_t<BeginErrorRecoveryTurn>) const {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnBeginErrorRecoveryTurn"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnBeginErrorRecoveryTurn"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         std::shared_ptr<IPlayer> player = so_is_active_state(white_turn) ? state_.players.white : state_.players.black;
         player->BeginErrorRecoveryTurn(MakeTurnContext());
     }
 
     void OnPlayerMoveAction(const mhood_t<PlayerMoveAction> move) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerMoveAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()}, {"move", move->algebraic_move_string});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerMoveAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()},
+            {"move", move->long_algebraic_move_string}
+        );
         AssertNextActionUnset();
         handle_this_turn_ = *move;
+    }
+
+    // Strict LAN enforcement: compares the notation's claimed +/#/x/piece against
+    // the board's computed truth (from applying the move) and appends a codified
+    // error for each mismatch, so every accepted move string is canonical LAN.
+    // The canonical form is appended to each message to guide the agent's retry.
+    static void CollectNotationClaimErrors(
+        const std::string& move_string,
+        const chess::notation::ParsedLongAlgebraicNotation& parsed,
+        const AlgebraicMove& result,
+        std::vector<chess::game::error::MoveError>& errors) {
+        const bool gives_check = (result.Flags & MoveFlag::Check) != 0;
+        const bool gives_checkmate = (result.Flags & MoveFlag::Checkmate) != 0;
+        const bool is_capture = (result.Flags & MoveFlag::Capture) != 0;
+        const std::string canonical = chess::notation::FormatLongAlgebraicNotation(result);
+
+        const auto push = [&errors, &canonical](chess::game::error::MoveError error) {
+            error.description += " Expected: " + canonical + ".";
+            errors.push_back(std::move(error));
+        };
+
+        // Capture separator: 'x' iff a piece is actually captured.
+        if (parsed.is_capture && !is_capture) {
+            push(chess::game::error::InvalidCaptureNotation{move_string}.error);
+        } else if (!parsed.is_capture && is_capture && !parsed.is_castle) {
+            push(chess::game::error::MissingCaptureSymbol{move_string}.error);
+        }
+
+        // Checkmate '#'.
+        if (parsed.claims_checkmate && !gives_checkmate) {
+            push(chess::game::error::InvalidCheckmateClaim{move_string}.error);
+        } else if (!parsed.claims_checkmate && gives_checkmate) {
+            push(chess::game::error::MissingCheckmateSymbol{}.error);
+        }
+
+        // Check '+'. A mating move is terminal and must use '#', not '+', so only
+        // enforce the check suffix when the move checks without delivering mate.
+        if (!gives_checkmate) {
+            if (parsed.claims_check && !gives_check) {
+                push(chess::game::error::InvalidCheckClaim{move_string}.error);
+            } else if (!parsed.claims_check && gives_check) {
+                push(chess::game::error::MissingCheckSymbol{}.error);
+            }
+        }
+
+        // Piece letter must match the piece that actually moved.
+        if (parsed.piece != result.MovingPiece) {
+            push(chess::game::error::PieceMismatch{move_string}.error);
+        }
     }
 
     // Validates the submitted move off-thread (board reads are guarded), then
     // reports success or failure back to the orchestrator.
     void PerformPlayerMoveAction(const mhood_t<PlayerMoveAction> move) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "PerformPlayerMoveAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()}, {"move", move->algebraic_move_string});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "PerformPlayerMoveAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()},
+            {"move", move->long_algebraic_move_string}
+        );
         const auto blocking_mbox = so_environment().create_mbox(std::string{chess::application::task::kBlockingTaskMboxName});
         const auto board = state_.game_state.board;
         const auto board_mutex = state_.game_state.board_mutex;
@@ -409,9 +502,11 @@ private:
             std::vector<chess::game::error::MoveError> errors;
 
             if (board) {
-                // Agents speak SAN ("e5", "Nf3", "O-O", ...). Validate on a copy
-                // so the real board is untouched; Board::Move(AlgebraicMove)
-                // resolves + applies the SAN and throws if illegal/ambiguous.
+                // Agents speak Long Algebraic Notation ("e2-e4", "Ng1-f3", "O-O",
+                // "e7-e8=Q", ...). Validate on a copy so the real board is
+                // untouched: parse LAN -> coordinate move, apply via the engine's
+                // native path, then enforce the notation's +/#/x/piece claims
+                // against the board's computed truth.
                 Board snapshot;
                 if (board_mutex) {
                     const std::lock_guard<std::mutex> lock(*board_mutex);
@@ -420,17 +515,20 @@ private:
                     snapshot = *board;
                 }
 
+                const std::string& move_string = move->long_algebraic_move_string;
                 try {
-                    snapshot.Move(AlgebraicMove{move->algebraic_move_string});
-                    legal = true;
+                    const chess::notation::ParsedLongAlgebraicNotation parsed =
+                        chess::notation::ParseLongAlgebraicNotation(move_string, snapshot.GetPlayerTurn());
+                    const AlgebraicMove result = snapshot.Move(parsed.move);
+
+                    CollectNotationClaimErrors(move_string, parsed, result, errors);
+                    legal = errors.empty();
+                } catch (const MalformedLongAlgebraicNotationException& e) {
+                    errors.push_back(chess::game::error::MalformedLongAlgebraicNotation{e.move()}.error);
                 } catch (const chess::game::error::MoveErrorException& e) {
                     errors.push_back(e.error);
                 } catch (const IllegalMoveException& e) {
-                    errors.push_back(chess::game::error::ClassifyIllegalMove(e.what(), move->algebraic_move_string));
-                } catch (const InvalidAlgebraicMoveException&) {
-                    errors.push_back(chess::game::error::InvalidNotation{move->algebraic_move_string}.error);
-                } catch (const InvalidCaptureException& e) {
-                    errors.push_back(chess::game::error::InvalidCaptureNotation{e.move()}.error);
+                    errors.push_back(chess::game::error::ClassifyIllegalMove(e.what(), move_string));
                 } catch (const std::exception& e) {
                     errors.push_back({chess::game::error::kErrorAgentFailure, e.what()});
                 }
@@ -438,17 +536,23 @@ private:
 
             if (!legal) {
                 so_5::send<PlayerMoveActionValidationFailure>(
-                    *this, move->color, move->algebraic_move_string, move->id, errors);
+                    *this, move->color, move->long_algebraic_move_string, move->id, errors);
                 return;
             }
             so_5::send<PlayerMoveActionValidationSuccess>(
-                *this, move->color, move->algebraic_move_string, move->id);
+                *this, move->color, move->long_algebraic_move_string, move->id);
         };
         so_5::send<chess::application::task::BlockingTask>(blocking_mbox, validate_move_task);
     }
 
     void OnMoveValidationSuccess(const mhood_t<PlayerMoveActionValidationSuccess> success) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnMoveValidationSuccess"}, {"game_id", game_id_}, {"state", so_current_state().query_name()}, {"move", success->algebraic_move_string});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnMoveValidationSuccess"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()},
+            {"move", success->long_algebraic_move_string}
+        );
         bool applied = false;
         bool is_game_over = false;
         Piece captured_piece = None;
@@ -467,11 +571,15 @@ private:
             try {
                 const std::array<int, 16> before = count_pieces();
 
-                // Re-resolve the SAN against the (unchanged) real board and apply.
-                state_.game_state.board->Move(AlgebraicMove{success->algebraic_move_string});
+                // Re-parse the LAN against the (unchanged) real board and apply
+                // through the engine's native coordinate path.
+                const chess::notation::ParsedLongAlgebraicNotation parsed =
+                    chess::notation::ParseLongAlgebraicNotation(
+                        success->long_algebraic_move_string, state_.game_state.board->GetPlayerTurn());
+                state_.game_state.board->Move(parsed.move);
                 applied = true;
                 // Record the move so subsequent turn requests carry the full history.
-                state_.game_state.move_history.push_back(success->algebraic_move_string);
+                state_.game_state.move_history.push_back(success->long_algebraic_move_string);
 
                 // Detect the captured piece (if any) by diffing only the
                 // opponent's per-type counts: exactly one drops by 1 on a
@@ -517,10 +625,16 @@ private:
         PublishStateChange();
 
         if (!applied) {
-            CHESS_TRACE_LOG("stdout_chess", {"operation", "branch"}, {"function", "OnMoveValidationSuccess"}, {"game_id", game_id_}, {"outcome", "apply_failed"}, {"move", success->algebraic_move_string});
+            CHESS_TRACE_LOG("stdout_chess",
+                {"operation", "branch"},
+                {"function", "OnMoveValidationSuccess"},
+                {"game_id", game_id_},
+                {"outcome", "apply_failed"},
+                {"move", success->long_algebraic_move_string}
+            );
             // Shouldn't happen post-validation; recover by re-prompting the player.
             so_5::send<PlayerMoveActionValidationFailure>(
-                *this, success->color, success->algebraic_move_string, success->id,
+                *this, success->color, success->long_algebraic_move_string, success->id,
                 std::vector<chess::game::error::MoveError>{{chess::game::error::kErrorMoveNotApplied, "Move could not be applied to the board."}});
             return;
         }
@@ -529,7 +643,7 @@ private:
 
         // Record the accepted move in the shared log (sidebar bubble + history bar).
         if (state_.move_log) {
-            state_.move_log->Append({success->id, success->color, success->algebraic_move_string, true, {}});
+            state_.move_log->Append({success->id, success->color, success->long_algebraic_move_string, true, {}});
         }
 
         // Record the capture in the mover's trajectory (opponent piece, in order).
@@ -538,20 +652,24 @@ private:
             if (mover_trajectory) {
                 mover_trajectory->AddCapturedPiece(captured_piece);
             }
-            CHESS_TRACE_LOG("stdout_chess", {"operation", "capture"}, {"function", "OnMoveValidationSuccess"}, {"game_id", game_id_}, {"by", success->color == White ? "white" : "black"}, {"piece", static_cast<int>(captured_piece)});
+            CHESS_TRACE_LOG("stdout_chess",
+                {"operation", "capture"},
+                {"function", "OnMoveValidationSuccess"},
+                {"game_id", game_id_},
+                {"by", success->color == White ? "white" : "black"},
+                {"piece", static_cast<int>(captured_piece)}
+            );
         }
 
         // Emit successful move telemetry
         if (state_.gaunt_context) {
-            namespace ggcc = gaunt::generated::chess_coliseum;
             auto& player_ctx = (success->color == White)
                 ? state_.gaunt_context->white_player
                 : state_.gaunt_context->black_player;
 
             if (player_ctx.current_move_context.has_value()) {
-                const auto gaunt_color = chess::telemetry::ToGauntColor(success->color);
                 player_ctx.current_move_context->Accept(
-                    ggcc::event::MoveSubmitted{gaunt_color, success->algebraic_move_string}
+                    ggcc::event::SubmitValidMove{success->long_algebraic_move_string}
                 );
                 player_ctx.current_move_context->Accept(ggcc::event::MoveEnd{});
                 player_ctx.current_move_context.reset();
@@ -559,7 +677,12 @@ private:
         }
 
         if (is_game_over) {
-            CHESS_TRACE_LOG("stdout_chess", {"operation", "branch"}, {"function", "OnMoveValidationSuccess"}, {"game_id", game_id_}, {"outcome", end_cause});
+            CHESS_TRACE_LOG("stdout_chess",
+                {"operation", "branch"},
+                {"function", "OnMoveValidationSuccess"},
+                {"game_id", game_id_},
+                {"outcome", end_cause}
+            );
             pending_result_ = MatchResult{end_outcome, end_cause};
             so_5::send<EndGame>(*this);
             return;
@@ -570,35 +693,38 @@ private:
     }
 
     void OnMoveValidationFailure(const mhood_t<PlayerMoveActionValidationFailure> failure) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnMoveValidationFailure"}, {"game_id", game_id_}, {"state", so_current_state().query_name()}, {"move", failure->algebraic_move_string});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnMoveValidationFailure"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()},
+            {"move", failure->long_algebraic_move_string}
+        );
         // Record the rejected attempt + its codified errors in the shared log.
         if (state_.move_log) {
-            state_.move_log->Append({failure->id, failure->color, failure->algebraic_move_string, false, failure->errors});
+            state_.move_log->Append({failure->id, failure->color, failure->long_algebraic_move_string, false, failure->errors});
         }
         // Surface the codified errors (CODE - description) to the agent's recovery context.
         for (const auto& move_error : failure->errors) {
             next_turn_payload_.errors.push_back(move_error.Format());
         }
-        next_turn_payload_.errors.emplace_back("Move '" + failure->algebraic_move_string + "' is not legal.");
+        next_turn_payload_.errors.emplace_back("Move '" + failure->long_algebraic_move_string + "' is not legal.");
 
         // Emit failed move telemetry
         if (state_.gaunt_context) {
-            namespace ggcc = gaunt::generated::chess_coliseum;
             auto& player_ctx = (failure->color == White)
                 ? state_.gaunt_context->white_player
                 : state_.gaunt_context->black_player;
 
             if (player_ctx.current_move_context.has_value()) {
-                std::string validation_errors;
-                for (const auto& err : failure->errors) {
-                    if (!validation_errors.empty()) validation_errors += "; ";
-                    validation_errors += err.Format();
+                // Collapse the accumulated codified errors into the single enum the
+                // event carries; purely agent/system failures map to nothing, so we
+                // close the move context without a SubmitInvalidMove in that case.
+                if (const auto input_error = chess::telemetry::SelectMoveInputError(failure->errors)) {
+                    player_ctx.current_move_context->Accept(
+                        ggcc::event::SubmitInvalidMove{failure->long_algebraic_move_string, input_error.value()}
+                    );
                 }
-                player_ctx.current_move_context->Accept(
-                    ggcc::event::MakeMove{failure->algebraic_move_string, validation_errors}
-                );
-                player_ctx.current_move_context->Accept(ggcc::event::MoveEnd{});
-                player_ctx.current_move_context.reset();
             }
         }
 
@@ -616,7 +742,13 @@ private:
     // The agent itself failed to produce an action (e.g. finished without a
     // move). We're already in the player's turn state, so just recover/forfeit.
     void OnPlayerError(const mhood_t<PlayerError> error) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerError"}, {"game_id", game_id_}, {"state", so_current_state().query_name()}, {"message", error->message});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerError"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()},
+            {"message", error->message}
+        );
         next_turn_payload_.errors.emplace_back(error->message);
         RetryOrForfeit();
     }
@@ -625,9 +757,22 @@ private:
     // times in a row (avoids an unbounded retry loop / softlock).
     void RetryOrForfeit() {
         ++consecutive_failures_;
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "RetryOrForfeit"}, {"game_id", game_id_}, {"state", so_current_state().query_name()}, {"consecutive_failures", consecutive_failures_}, {"max_retries", kMaxTurnRetries});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "RetryOrForfeit"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()},
+            {"consecutive_failures", consecutive_failures_},
+            {"max_retries", kMaxTurnRetries}
+        );
         if (consecutive_failures_ >= kMaxTurnRetries) {
-            CHESS_TRACE_LOG("stdout_chess", {"operation", "branch"}, {"function", "RetryOrForfeit"}, {"game_id", game_id_}, {"outcome", "forfeit"}, {"consecutive_failures", consecutive_failures_});
+            CHESS_TRACE_LOG("stdout_chess",
+                {"operation", "branch"},
+                {"function", "RetryOrForfeit"},
+                {"game_id", game_id_},
+                {"outcome", "forfeit"},
+                {"consecutive_failures", consecutive_failures_}
+            );
             // A persistently-failing agent is a technical glitch, not a loss:
             // the game is void (NO_CONTEST). Finalize before publishing Concluded.
             FinalizeResult(MatchResult{MatchOutcome::NoContest, "forfeit_no_move"});
@@ -640,7 +785,12 @@ private:
     }
 
     void OnPlayerQuip(const mhood_t<PlayerQuip> quip) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerQuip"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerQuip"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         next_turn_payload_.quips.emplace_back(quip->quip);
         // Also record in the player's own quip history for self-context
         if (so_is_active_state(white_turn) || so_is_active_state(white_action) || so_is_active_state(white_retrospective)) {
@@ -650,27 +800,105 @@ private:
         }
     }
 
+    // Emits a player-lifecycle event (draw offer/accept/decline, resignation) on
+    // whichever player is currently acting.
+    template <typename EventT>
+    void EmitActingPlayerEvent(EventT&& event) {
+        if (!state_.gaunt_context) {
+            return;
+        }
+        auto& player_ctx = so_is_active_state(white_action)
+            ? state_.gaunt_context->white_player
+            : state_.gaunt_context->black_player;
+        if (player_ctx.player_context.has_value()) {
+            player_ctx.player_context->Accept(std::forward<EventT>(event));
+        }
+    }
+
+    // Records how the game ended on the Game context, mapping the finalized
+    // MatchResult (outcome + cause) onto the matching resolution event and kind.
+    void EmitGameResolution(
+        gaunt::core::GauntContext<gaunt::generated::chess_coliseum::context::Game>& game_context,
+        const MatchResult& result) {
+        namespace ggcc = gaunt::generated::chess_coliseum;
+        switch (result.outcome) {
+            case MatchOutcome::NoContest:
+                game_context.Accept(ggcc::event::NoContestResolution{});
+                break;
+            case MatchOutcome::Draw: {
+                // Unknown draw causes (fifty-move / threefold) fall through to MoveRule.
+                auto kind = ggcc::attribute::DrawKind::MoveRule;
+                if (result.cause == "stalemate") {
+                    kind = ggcc::attribute::DrawKind::Stalemate;
+                } else if (result.cause == "draw_agreement") {
+                    kind = ggcc::attribute::DrawKind::Agreement;
+                }
+                game_context.Accept(ggcc::event::DrawResolution{kind});
+                break;
+            }
+            case MatchOutcome::WhiteWin:
+            case MatchOutcome::BlackWin: {
+                auto kind = ggcc::attribute::DecisiveKind::Checkmate;
+                if (result.cause == "resignation") {
+                    kind = ggcc::attribute::DecisiveKind::Resignation;
+                } else if (result.cause == "time" || result.cause == "timeout") {
+                    kind = ggcc::attribute::DecisiveKind::Time;
+                }
+                const auto winner = (result.outcome == MatchOutcome::WhiteWin)
+                    ? ggcc::attribute::Color::White
+                    : ggcc::attribute::Color::Black;
+                game_context.Accept(ggcc::event::DecisiveResolution{kind, winner});
+                break;
+            }
+            case MatchOutcome::InProgress:
+            default:
+                break;
+        }
+    }
+
     void OnPlayerOfferDrawAction(const mhood_t<PlayerOfferDrawAction> offer_draw) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerOfferDrawAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerOfferDrawAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         AssertNextActionUnset();
         handle_this_turn_ = *offer_draw;
     }
 
     void PerformPlayerOfferDrawAction(const mhood_t<PlayerOfferDrawAction> offer_draw) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "PerformPlayerOfferDrawAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "PerformPlayerOfferDrawAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
+        EmitActingPlayerEvent(ggcc::event::OfferDraw{});
         next_turn_payload_.action_to_handle = handle_this_turn_;
         handle_this_turn_ = std::monostate{};
         so_5::send<TurnTransition>(*this);
     }
 
     void OnPlayerAcceptDrawAction(const mhood_t<PlayerAcceptDrawAction> accept_draw) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerAcceptDrawAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerAcceptDrawAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         AssertNextActionUnset();
         handle_this_turn_ = *accept_draw;
     }
 
     void PerformPlayerAcceptDrawAction(const mhood_t<PlayerAcceptDrawAction> accept_draw) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "PerformPlayerAcceptDrawAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "PerformPlayerAcceptDrawAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
+        EmitActingPlayerEvent(ggcc::event::AcceptDraw{});
         // A draw offer was accepted: the game ends as an agreed draw. OnEndGame
         // finalizes pending_result_ and concludes (no more moves are processed).
         pending_result_ = MatchResult{MatchOutcome::Draw, "draw_agreement"};
@@ -678,26 +906,48 @@ private:
     }
 
     void OnPlayerDeclineDrawAction(const mhood_t<PlayerDeclineDrawAction> decline_draw) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerDeclineDrawAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerDeclineDrawAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         AssertNextActionUnset();
         handle_this_turn_ = *decline_draw;
     }
 
     void PerformPlayerDeclineDrawAction(const mhood_t<PlayerDeclineDrawAction> decline_draw) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "PerformPlayerDeclineDrawAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "PerformPlayerDeclineDrawAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
+        EmitActingPlayerEvent(ggcc::event::DeclineDraw{});
         next_turn_payload_.action_to_handle = handle_this_turn_;
         handle_this_turn_ = std::monostate{};
         so_5::send<TurnTransition>(*this);
     }
 
     void OnPlayerSubmitResignationAction(const mhood_t<PlayerSubmitResignationAction> submit_resignation) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerSubmitResignationAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerSubmitResignationAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         AssertNextActionUnset();
         handle_this_turn_ = *submit_resignation;
     }
 
     void PerformPlayerSubmitResignationAction(const mhood_t<PlayerSubmitResignationAction> submit_resignation) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "PerformPlayerSubmitResignationAction"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "PerformPlayerSubmitResignationAction"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
+        EmitActingPlayerEvent(ggcc::event::SubmitResignation{});
         // The player whose action is being processed is resigning; the opponent
         // wins. (We are in white_action / black_action for that player.)
         const bool white_resigned = so_is_active_state(white_action);
@@ -711,7 +961,12 @@ private:
     // after the handler is finished
     // acts as a dumb router
     void OnPlayerYield(const mhood_t<PlayerYield>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnPlayerYield"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnPlayerYield"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
 
         if (so_is_active_state(white_turn)) {
             so_change_state(white_action);
@@ -743,23 +998,72 @@ private:
     }
 
     void OnTurnTransition(const mhood_t<TurnTransition>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnTurnTransition"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnTurnTransition"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         handle_this_turn_ = std::monostate{}; // consumed; ready for the next turn
         if (so_is_active_state(white_action)) {
+            // Move End context here for white
             so_change_state(black_turn);
+            // Move Begin context here for black
         } else if (so_is_active_state(black_action)) {
+            // Move End context here for black
             so_change_state(white_turn);
+            // Move Begin context here for white
         }
         so_5::send<BeginTurn>(*this);
         PublishStateChange();
     }
 
     void OnEndGame(const mhood_t<EndGame>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnEndGame"}, {"game_id", game_id_}, {"state", so_current_state().query_name()}, {"retrospective_turn_count", state_.game_configuration.retrospective_turn_count});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnEndGame"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()},
+            {"retrospective_turn_count", state_.game_configuration.retrospective_turn_count}
+        );
+
         // Finalize the result (set by whichever path led here: checkmate/stalemate,
         // draw agreement, or resignation) before any state transition publishes
         // the Concluded phase.
         FinalizeResult(pending_result_);
+
+        // Tear down this game's telemetry contexts, child -> parent: close any Move
+        // context still open (a resignation / accepted draw ends the turn without a
+        // move), record the resolution on the Game context, then end both Player
+        // contexts and the Game context itself.
+        if (state_.gaunt_context) {
+            namespace ggcc = gaunt::generated::chess_coliseum;
+            auto& gctx = *state_.gaunt_context;
+
+            for (auto* player_ctx : {&gctx.white_player, &gctx.black_player}) {
+                if (player_ctx->current_move_context.has_value()) {
+                    player_ctx->current_move_context->Accept(ggcc::event::MoveEnd{});
+                    player_ctx->current_move_context.reset();
+                }
+            }
+
+            if (gctx.game_context.has_value()) {
+                EmitGameResolution(*gctx.game_context, pending_result_);
+            }
+
+            for (auto* player_ctx : {&gctx.white_player, &gctx.black_player}) {
+                if (player_ctx->player_context.has_value()) {
+                    player_ctx->player_context->Accept(ggcc::event::PlayerEnd{});
+                    player_ctx->player_context.reset();
+                }
+            }
+
+            if (gctx.game_context.has_value()) {
+                gctx.game_context->Accept(ggcc::event::GameEnd{});
+                gctx.game_context.reset();
+            }
+        }
+
         if (state_.game_configuration.retrospective_turn_count > 0) {
             if (so_is_active_state(white_action)) {
                 so_change_state(black_retrospective);
@@ -775,19 +1079,35 @@ private:
     }
 
     void OnBeginRetrospectiveTurn(const mhood_t<BeginRetrospectiveTurn>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnBeginRetrospectiveTurn"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnBeginRetrospectiveTurn"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
         const auto& player = GetPlayerForThisTurn();
         player->BeginRetrospectiveTurn(MakeTurnContext());
     }
 
     void OnRetrospectiveYield(const mhood_t<PlayerYield>) {
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "enter"}, {"function", "OnRetrospectiveYield"}, {"game_id", game_id_}, {"state", so_current_state().query_name()});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "enter"},
+            {"function", "OnRetrospectiveYield"},
+            {"game_id", game_id_},
+            {"state", so_current_state().query_name()}
+        );
 
         state_.retrospective_state.retrospective_action_counter = state_.retrospective_state.retrospective_action_counter + 1;
         const std::size_t completed_turns = state_.retrospective_state.retrospective_action_counter / 2;
         const std::size_t configured_turns = state_.game_configuration.retrospective_turn_count;
 
-        CHESS_TRACE_LOG("stdout_chess", {"operation", "check_retrospective_progress"}, {"function", "OnRetrospectiveYield"}, {"game_id", game_id_}, {"completed_turns", completed_turns}, {"configured_turns", configured_turns});
+        CHESS_TRACE_LOG("stdout_chess",
+            {"operation", "check_retrospective_progress"},
+            {"function", "OnRetrospectiveYield"},
+            {"game_id", game_id_},
+            {"completed_turns", completed_turns},
+            {"configured_turns", configured_turns}
+        );
 
         if (completed_turns >= configured_turns) {
             // All retrospective turns completed; conclude the game.

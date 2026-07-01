@@ -12,13 +12,13 @@ namespace chess::game::execution {
 
 struct PlayerMoveActionValidationSuccess {
     Colour color;
-    std::string algebraic_move_string{};
+    std::string long_algebraic_move_string{};
     std::string id{};
 };
 
 struct PlayerMoveActionValidationFailure {
     Colour color;
-    std::string algebraic_move_string{};
+    std::string long_algebraic_move_string{};
     std::string id{};
     std::vector<error::MoveError> errors{};
 };

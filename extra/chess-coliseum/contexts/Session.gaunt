@@ -1,0 +1,17 @@
+module Tristan.Community.ChessColiseum.Context;
+
+import Gaunt.Common.Event.SessionBegin;
+import Gaunt.Common.Event.SessionEnd;
+import Tristan.Community.ChessColiseum.Context.Game;
+
+obj Session is Context {
+    meta {
+        let String NormalName = "Session";
+        let Int32 Id = 201;
+        let Type Key = Tuple[String];  // Random UUID Session ID
+        let Type BeginEvent = SessionBegin;
+        let Type EndEvent = SessionEnd;
+        let Type Events = TypeSet[];
+        let Type Children = TypeSet[Game];
+    }
+}

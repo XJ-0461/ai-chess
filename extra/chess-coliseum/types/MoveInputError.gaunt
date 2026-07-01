@@ -1,0 +1,47 @@
+module Tristan.Community.ChessColiseum.Type;
+
+obj MoveInputError is Enum {
+
+    meta {
+        let String NormalName = "Move Input Error";
+        let Int32 Id = 1002;
+        let Array[String, 11] NormalFieldNames = Array[String, 11].new(
+            "Illegal Move",
+            "Ambiguous Move",
+            "Invalid Long Algebraic Notation",
+            "Malformed Long Algebraic Notation",
+            "Missing Check Symbol",
+            "Missing Checkmate Symbol",
+            "Invalid Check Claim",
+            "Invalid Checkmate Claim",
+            "Invalid Capture Notation",
+            "Missing Capture Symbol",
+            "Piece Mismatch"
+        );
+    }
+
+    fields {
+        let UInt64 value = 0;
+        let UInt64 IllegalMove = 0;
+        let UInt64 AmbiguousMove = 1;
+        let UInt64 InvalidLongAlgebraicNotation = 2;
+        let UInt64 MalformedLongAlgebraicNotation = 3;
+        let UInt64 MissingCheckSymbol = 4;
+        let UInt64 MissingCheckmateSymbol = 5;
+        let UInt64 InvalidCheckClaim = 6;
+        let UInt64 InvalidCheckmateClaim = 7;
+        let UInt64 InvalidCaptureNotation = 8;
+        let UInt64 MissingCaptureSymbol = 9;
+        let UInt64 PieceMismatch = 10;
+    }
+
+    functions {
+
+        fn new(UInt64 ordinal) -> MoveInputError {
+            this.value = ordinal;
+            return this;
+        }
+
+    }
+
+}
