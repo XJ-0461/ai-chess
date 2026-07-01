@@ -499,7 +499,15 @@ void Application::Init() {
 
                 const std::string type = request.value("type", std::string{});
                 const std::string id = request.value("id", std::string{});
-                const std::string game_id = request.value("game_id", std::string{});
+
+                // Runtime requests carry their arguments in a `detail` object
+                // (matching the startup command-file format). For backward
+                // compatibility, if `detail` is absent, fall back to a top-level
+                // `game_id` (older query_match_result callers used that shape).
+                nlohmann::json detail = request.value("detail", nlohmann::json::object());
+                if (!request.contains("detail") && request.contains("game_id")) {
+                    detail["game_id"] = request.at("game_id");
+                }
 
                 // Routes a result back to the originating client, tagging it with
                 // the request's correlation id. Runs on the executor thread.
@@ -515,13 +523,16 @@ void Application::Init() {
                     reply_server->Reply(identity, out.dump());
                 };
 
-                if (type == "query_match_result") {
+                // Parse and dispatch any supported command (the same surface as
+                // the startup command file). The executor answers each with a
+                // response/ack, routed back correlated by `id`.
+                std::string parse_error;
+                auto command = chess::application::command::ParseCommand(type, detail, parse_error);
+                if (command) {
                     so_5::send<chess::application::command::ExecuteCommand>(
-                        executor,
-                        chess::application::command::Command{ chess::application::command::QueryMatchResultCommand{ game_id } },
-                        reply);
+                        executor, std::move(*command), reply);
                 } else {
-                    nlohmann::json error{{"type", "error"}, {"error", "unknown_request_type"}};
+                    nlohmann::json error{{"type", "error"}, {"error", parse_error}};
                     if (!id.empty()) {
                         error["id"] = id;
                     }

@@ -102,6 +102,28 @@ OpenSpectatorViewCommand ParseOpenSpectatorView(const nlohmann::json& detail) {
 
 } // namespace
 
+std::optional<Command> ParseCommand(const std::string& type, const nlohmann::json& detail, std::string& error) {
+    if (type == "configure_provider") {
+        return Command{ ParseConfigureProvider(detail) };
+    } else if (type == "configure_game") {
+        return Command{ ParseConfigureGame(detail) };
+    } else if (type == "start_game") {
+        return Command{ StartGameCommand{ detail.value("game_id", std::string{}) } };
+    } else if (type == "query_match_result") {
+        return Command{ QueryMatchResultCommand{ detail.value("game_id", std::string{}) } };
+    } else if (type == "open_spectator_view") {
+        return Command{ ParseOpenSpectatorView(detail) };
+    } else if (type == "spectator_view::set_move_history_bar") {
+        return Command{ SetMoveHistoryBarCommand{
+            detail.value("window_id", std::string{}),
+            detail.value("enable_move_history_bar", true)
+        } };
+    }
+
+    error = "Unknown command type: '" + type + "'";
+    return std::nullopt;
+}
+
 std::optional<CommandList> LoadCommandsFromFile(const std::string& path, std::string& error) {
     std::ifstream file(path);
     if (!file) {
@@ -130,25 +152,11 @@ std::optional<CommandList> LoadCommandsFromFile(const std::string& path, std::st
         const std::string type = entry.value("type", std::string{});
         const nlohmann::json detail = entry.value("detail", nlohmann::json::object());
 
-        if (type == "configure_provider") {
-            commands.emplace_back(ParseConfigureProvider(detail));
-        } else if (type == "configure_game") {
-            commands.emplace_back(ParseConfigureGame(detail));
-        } else if (type == "start_game") {
-            commands.emplace_back(StartGameCommand{ detail.value("game_id", std::string{}) });
-        } else if (type == "query_match_result") {
-            commands.emplace_back(QueryMatchResultCommand{ detail.value("game_id", std::string{}) });
-        } else if (type == "open_spectator_view") {
-            commands.emplace_back(ParseOpenSpectatorView(detail));
-        } else if (type == "spectator_view::set_move_history_bar") {
-            commands.emplace_back(SetMoveHistoryBarCommand{
-                detail.value("window_id", std::string{}),
-                detail.value("enable_move_history_bar", true)
-            });
-        } else {
-            error = "Unknown command type: '" + type + "'";
+        auto command = ParseCommand(type, detail, error);
+        if (!command) {
             return std::nullopt;
         }
+        commands.emplace_back(std::move(*command));
     }
 
     return commands;

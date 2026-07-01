@@ -78,31 +78,54 @@ private:
         current_reply_ = nullptr;
     }
 
+    // Sends an ack to a waiting runtime caller (no-op for fire-and-forget
+    // startup-file commands, where current_reply_ is null). The `code` mirrors
+    // HTTP-style status so the caller can sequence deterministically.
+    void AckReply(const char* type, int code, const std::string& game_id) {
+        if (!current_reply_) {
+            return;
+        }
+        nlohmann::json response;
+        response["type"] = type;
+        response["code"] = code;
+        if (!game_id.empty()) {
+            response["game_id"] = game_id;
+        }
+        current_reply_(response);
+    }
+
     void Execute(const ConfigureProviderCommand& command) {
         if (callbacks_.configure_provider) {
             callbacks_.configure_provider(command.provider);
         }
+        AckReply("configure_provider_response", callbacks_.configure_provider ? 200 : 501, {});
     }
 
     void Execute(const ConfigureGameCommand& command) {
         if (!callbacks_.create_game) {
+            AckReply("configure_game_response", 501, command.game_id);
             return;
         }
         const auto context = callbacks_.create_game(command.configuration, command.game_id);
         WaitForPhase(context, chess::game::GameLifecyclePhase::Ready, "configure_game", command.game_id);
+        // aborted_ is set by WaitForPhase on timeout / missing observable game.
+        AckReply("configure_game_response", aborted_ ? 500 : 200, command.game_id);
     }
 
     void Execute(const StartGameCommand& command) {
         if (!callbacks_.find_game) {
+            AckReply("start_game_response", 501, command.game_id);
             return;
         }
         const auto context = callbacks_.find_game(command.game_id);
         if (!context) {
             std::cerr << "[ExternalCommandExecutor] start_game: unknown game id '" << command.game_id << "'\n";
+            AckReply("start_game_response", 404, command.game_id);
             return;
         }
         so_5::send<chess::game::execution::StartGame>(context->command_mbox);
         WaitForPhase(context, chess::game::GameLifecyclePhase::InProgress, "start_game", command.game_id);
+        AckReply("start_game_response", aborted_ ? 500 : 200, command.game_id);
     }
 
     void Execute(const QueryMatchResultCommand& command) {
