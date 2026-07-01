@@ -51,7 +51,8 @@ namespace {
     return command;
 }
 
-[[nodiscard]] ConfigureGameCommand ParseConfigureGame(const nlohmann::json& detail) {
+[[nodiscard]]
+ConfigureGameCommand ParseConfigureGame(const nlohmann::json& detail) {
     ConfigureGameCommand command;
     command.game_id = detail.value("game_id", std::string{});
     if (detail.contains("white")) {
@@ -68,7 +69,8 @@ namespace {
     return command;
 }
 
-[[nodiscard]] OpenSpectatorViewCommand ParseOpenSpectatorView(const nlohmann::json& detail) {
+[[nodiscard]]
+OpenSpectatorViewCommand ParseOpenSpectatorView(const nlohmann::json& detail) {
     OpenSpectatorViewCommand command;
     command.game_id = detail.value("game_id", std::string{});
     command.game_view_theme = detail.value("game_view_theme", std::string{"default"});
@@ -123,7 +125,7 @@ std::optional<CommandList> LoadCommandsFromFile(const std::string& path, std::st
         return std::nullopt;
     }
 
-    CommandList commands;
+    CommandList commands{};
     for (const auto& entry : root.at("commands")) {
         const std::string type = entry.value("type", std::string{});
         const nlohmann::json detail = entry.value("detail", nlohmann::json::object());

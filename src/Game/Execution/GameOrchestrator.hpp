@@ -368,6 +368,23 @@ private:
         // Include the player's own quip history for self-context (avoid repetition)
         const bool is_white = so_is_active_state(white_turn) || so_is_active_state(white_action) || so_is_active_state(white_retrospective);
         context.own_quip_history = is_white ? state_.game_state.white_quip_history : state_.game_state.black_quip_history;
+        context.cause = pending_result_.cause;
+        switch (pending_result_.outcome) {
+            case MatchOutcome::WhiteWin: {
+                context.winner = "white";
+                break;
+            }
+            case MatchOutcome::BlackWin: {
+                context.winner = "black";
+                break;
+            }
+            case MatchOutcome::NoContest: {
+                context.winner = "NO_CONTEST";
+                context.cause = "NO_CONTEST";
+                break;
+            }
+            default: break; // Draw / InProgress -> empty winner
+        }
         return context;
     }
 

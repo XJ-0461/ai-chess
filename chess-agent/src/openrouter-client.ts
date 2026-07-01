@@ -461,8 +461,21 @@ return accepted;
       },
     });
 
+    let resultSummary: string;
+    switch (winner) {
+      case "NO_CONTEST":
+        resultSummary = `The game ended in no contest (voided, no result).`;
+        break;
+      case "":
+        resultSummary = `Draw by (${cause}).`;
+        break;
+      default:
+        resultSummary = `${winner} won by ${cause}.`;
+        break;
+    }
+
     const systemPrompt = `You are a Grandmaster-level chess engine. The game has concluded.
-      Winner: ${winner}, Cause: ${cause}
+      Result: ${resultSummary}
       Personality: ${personality}
 
       Use the \`quip\` tool to share your thoughts, boast, or taunt your opponent based on the result.
@@ -491,7 +504,7 @@ return accepted;
     const userPrompt = `Final Game History:
 ${historyText}
 
-Result: ${winner} won by ${cause}.
+Result: ${resultSummary}
 ${quipsText}${ownQuipsText}
 Please analyze the game and provide your retrospective quips, then call \`end_turn\`.`;
 

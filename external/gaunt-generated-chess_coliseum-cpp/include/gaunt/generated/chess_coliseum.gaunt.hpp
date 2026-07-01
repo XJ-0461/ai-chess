@@ -1316,7 +1316,7 @@ struct Game final : public gaunt::core::domain::IContext {
 
     [[nodiscard]]
     constexpr std::string KeyAsString() const override {
-        return std::string{"{"} + std::get<0>(key_) + std::string{"}"};
+        return std::string{"("} + std::get<0>(key_) + std::string{")"};
     }
 
     struct Metadata {
@@ -1349,7 +1349,7 @@ struct Player final : public gaunt::core::domain::IContext {
 
     [[nodiscard]]
     constexpr std::string KeyAsString() const override {
-        return std::string{"{"} + AsStringView(static_cast<attribute::Color>(std::get<0>(key_))) + std::string{"}"};
+        return std::string{"("} + AsStringView(static_cast<attribute::Color>(std::get<0>(key_))) + std::string{")"};
     }
 
     struct Metadata {
@@ -1382,7 +1382,7 @@ struct Move final : public gaunt::core::domain::IContext {
 
     [[nodiscard]]
     constexpr std::string KeyAsString() const override {
-        return std::string{"{"} + std::to_string(std::get<0>(key_)) + std::string{"}"};
+        return std::string{"("} + std::to_string(std::get<0>(key_)) + std::string{")"};
     }
 
     struct Metadata {
@@ -1415,7 +1415,7 @@ struct Session final : public gaunt::core::domain::IContext {
 
     [[nodiscard]]
     constexpr std::string KeyAsString() const override {
-        return std::string{"{"} + std::get<0>(key_) + std::string{"}"};
+        return std::string{"("} + std::get<0>(key_) + std::string{")"};
     }
 
     struct Metadata {
@@ -1448,7 +1448,7 @@ struct Root final : public gaunt::core::domain::IContext {
 
     [[nodiscard]]
     constexpr std::string KeyAsString() const override {
-        return std::string{"{"} + std::string{"}"};
+        return std::string{"("} + std::string{")"};
     }
 
     struct Metadata {

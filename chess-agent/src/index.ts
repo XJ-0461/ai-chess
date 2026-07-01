@@ -33,7 +33,7 @@ async function main() {
   let openRouterClient: OpenRouterClient | null = null;
   let modelName = "";
 
-  let myColor: "WHITE" | "BLACK" | null = null;
+  let myColor: "WHITE" | "BLACK" | undefined = undefined;
   let isGeneratingMove = false;
   let enableQuip = false;
   let enableDrawOffer = false;
@@ -241,7 +241,7 @@ async function main() {
             retroOwnQuipHistory,
             myColor || "WHITE",
             agentName,
-            message.winner || "DRAW",
+            message.winner,
             message.cause || "UNKNOWN",
             retroPersonality
           ).catch(err => console.error(`[${agentName}] Error in handleRetrospectiveRequest:`, err));
