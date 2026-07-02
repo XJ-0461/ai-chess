@@ -111,6 +111,8 @@ std::optional<Command> ParseCommand(const std::string& type, const nlohmann::jso
         return Command{ StartGameCommand{ detail.value("game_id", std::string{}) } };
     } else if (type == "query_match_result") {
         return Command{ QueryMatchResultCommand{ detail.value("game_id", std::string{}) } };
+    } else if (type == "game::estimate_cost") {
+        return Command{ EstimateCostCommand{ detail.value("game_id", std::string{}) } };
     } else if (type == "open_spectator_view") {
         return Command{ ParseOpenSpectatorView(detail) };
     } else if (type == "spectator_view::set_move_history_bar") {

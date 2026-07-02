@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <oneapi/tbb/concurrent_vector.h>
+
 #include "Chess/Board.h"
 #include "Game/Play/IPlayer.hpp"
 #include "Game/Configuration/GameConfiguration.hpp"
@@ -14,6 +16,7 @@
 #include "Game/GameMoveLog.hpp"
 #include "Game/Execution/MatchResult.hpp"
 #include "Utility/AgentTrajectory.h"
+#include "Application/AgentChat/Message/Usage.hpp"
 #include "Telemetry/GameTelemetry.hpp"
 
 namespace chess::game::execution {
@@ -71,9 +74,14 @@ struct GameOrchestratorState {
     std::shared_ptr<MatchResult> published_result{};
 
     // Per-player trajectories handed to the RemoteAgentPlayers so their streamed
-    // events surface in spectator views.
+    // events surface in spectator views. The parallel usage-history / pricing
+    // slots are shared with GameContext and drive the game::estimate_cost command.
     std::shared_ptr<AgentTrajectory> white_trajectory{};
+    std::shared_ptr<tbb::concurrent_vector<chess::agent::message::ModelUsage>> white_usage_history{};
+    std::shared_ptr<chess::agent::message::ModelPricing> white_model_pricing{};
     std::shared_ptr<AgentTrajectory> black_trajectory{};
+    std::shared_ptr<tbb::concurrent_vector<chess::agent::message::ModelUsage>> black_usage_history{};
+    std::shared_ptr<chess::agent::message::ModelPricing> black_model_pricing{};
 
     // Shared ordered move-outcome log (success/error per attempt).
     std::shared_ptr<GameMoveLog> move_log{};

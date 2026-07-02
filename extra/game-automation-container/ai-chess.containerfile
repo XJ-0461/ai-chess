@@ -15,19 +15,17 @@
 FROM quay.io/fedora/fedora-minimal:44 AS build
 
 # --- Toolchain + build dependencies -----------------------------------------
-# clang is required for the project's C++26 `#embed` / `--embed-dir` usage; gcc
-# is kept because vcpkg builds its ports with the system compiler. The X11 /
-# wayland / vulkan / alsa -devel packages satisfy vcpkg's sdl3 port (built with
-# features: x11 wayland vulkan alsa). ImageMagick + ffmpeg are used at CMake
-# configure time to bake texture atlases and placeholder WAVs.
+# gcc (15+) builds both the project (it supports C++26 `#embed` / --embed-dir) and
+# vcpkg's ports. The X11 / wayland / vulkan / alsa -devel packages satisfy vcpkg's
+# sdl3 port (built with features: x11 wayland vulkan alsa). ImageMagick + ffmpeg
+# are used at CMake configure time to bake texture atlases and placeholder WAVs.
 RUN microdnf install -y --setopt=install_weak_deps=0 \
-        clang lld llvm \
         gcc gcc-c++ \
         cmake ninja-build make \
         git ca-certificates \
         perl pkgconf-pkg-config which \
         zip unzip tar xz bzip2 \
-        autoconf automake libtool \
+        autoconf autoconf-archive automake libtool \
         python3 \
         nodejs npm \
         ImageMagick ffmpeg-free \
@@ -54,8 +52,12 @@ ARG GIT_REF=main
 ARG CACHE_BUST=0
 RUN echo "CACHE_BUST=${CACHE_BUST}"
 
-RUN git config --global "url.https://x-access-token:${GIT_TOKEN}@github.com/.insteadOf" "git@github.com:" \
-    && git config --global "url.https://x-access-token:${GIT_TOKEN}@github.com/.insteadOf" "ssh://git@github.com/"
+# insteadOf is multi-valued: use --add so BOTH the SCP form (git@github.com:owner/repo)
+# and the ssh:// form are rewritten to token HTTPS. (Without --add, the second config
+# call would overwrite the first, leaving the SCP form — used by the gaunt/nats
+# FetchContent deps — to fall back to SSH and fail with "Host key verification failed".)
+RUN git config --global url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "git@github.com:" \
+    && git config --global --add url."https://x-access-token:${GIT_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
 
 WORKDIR /src
 RUN GIT_REPO_WITH_TOKEN="$(echo "${GIT_REPO_URL}" | sed -E "s#https://github.com/#https://x-access-token:${GIT_TOKEN}@github.com/#")" \
@@ -66,16 +68,32 @@ WORKDIR /src/ai-chess
 # --- Build the C++ game ------------------------------------------------------
 # vcpkg (bootstrapped automatically by the cool-vcpkg FetchContent module) builds
 # SDL3/imgui/zmq/cpr/spdlog/etc. from source — this stage is long. The main
-# target is compiled with clang for the #embed support.
+# target is compiled with gcc (gcc 15+ supports #embed / --embed-dir).
+#
+# -fconstexpr-ops-limit: BoardAtlas.hpp scans the embedded ~80KB Board.rgba in a
+# consteval function; with Fedora's libstdc++ 16 headers (which run bounds-check
+# preconditions during constant evaluation) this blows GCC's default constexpr
+# operation limit (~33M). Raise it well above what the scan needs.
+#
+# Pre-seed the util-linux tarball for vcpkg's libmount port: its kernel.org
+# download URL now 404s, so fetch the identical tarball from a live mirror into
+# vcpkg's downloads cache. vcpkg finds it by filename, validates the SHA512, and
+# skips the dead URL. (python3 is already installed; avoids adding curl/wget.)
+RUN mkdir -p build/external/cool-vcpkg/downloads \
+    && python3 -c "import urllib.request; urllib.request.urlretrieve('https://download.nus.edu.sg/mirror/gentoo/distfiles/8f/util-linux-2.41.3.tar.xz', 'build/external/cool-vcpkg/downloads/util-linux-2.41.3.tar.xz')"
+
 RUN cmake -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_C_COMPILER=clang \
-        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_C_COMPILER=gcc \
+        -DCMAKE_CXX_COMPILER=g++ \
+        -DCMAKE_CXX_FLAGS="-fconstexpr-ops-limit=2000000000" \
     && cmake --build build --target Chess
 
 # --- Build the JS chess agents ----------------------------------------------
 WORKDIR /src/ai-chess/chess-agent
-RUN pnpm install --frozen-lockfile && pnpm build
+# pnpm-lock.yaml is gitignored (not in the clone), so resolve fresh rather than
+# requiring a frozen lockfile.
+RUN pnpm install --no-frozen-lockfile && pnpm build
 
 # =============================================================================
 # Stage 2: Runtime — headless X + software GL + audio + ffmpeg + node
@@ -94,21 +112,35 @@ RUN microdnf install -y --setopt=install_weak_deps=0 \
         libXScrnSaver libXtst libxkbcommon libxkbcommon-x11 \
         libwayland-client libwayland-egl \
         vulkan-loader \
-        alsa-lib pulseaudio pulseaudio-utils \
+        alsa-lib alsa-plugins-pulseaudio pulseaudio pulseaudio-utils \
         ffmpeg-free \
-        xdotool xorg-x11-utils \
+        xdotool \
         nodejs \
         python3 python3-pyzmq \
+        mangohud \
         ca-certificates procps-ng tree \
     && microdnf clean all
 
+# mangohud (headless FPS limiter): the render loop's only throttle is vsync, a
+# no-op under Xvfb + llvmpipe, so it free-runs and the software rasterizer pins
+# every core. MangoHud's OpenGL layer caps the buffer-swap rate via its fps_limit
+# (see launch_game() in orchestrate.py, which runs the game under `mangohud` with
+# MANGOHUD_CONFIG=fps_limit=<n>,no_display=1). It's in Fedora's base repos and
+# actively maintained, unlike libstrangle (whose glibc-private __libc_dlsym usage
+# no longer resolves on glibc 2.34+).
+
 WORKDIR /app
 
-# Artifacts from the build stage (everything originates from the cloned repo).
+# Compiled artifacts come from the build stage (they originate from the cloned repo).
 COPY --from=build /src/ai-chess/build/Chess /app/Chess
 COPY --from=build /src/ai-chess/chess-agent /app/chess-agent
-COPY --from=build /src/ai-chess/extra/game-automation-container/entrypoint.sh /app/entrypoint.sh
-COPY --from=build /src/ai-chess/extra/game-automation-container/orchestrate.py /app/orchestrate.py
+# The orchestration scripts are copied from the local build context (your working
+# tree), NOT the git clone. This lets you iterate on them with a plain rebuild —
+# editing either file invalidates only its COPY layer (no commit/push, no
+# CACHE_BUST needed). The build context is this directory (extra/game-automation-container),
+# so these are referenced by bare filename (see the build command in readme.md).
+COPY entrypoint.sh /app/entrypoint.sh
+COPY orchestrate.py /app/orchestrate.py
 
 RUN chmod +x /app/Chess /app/entrypoint.sh
 

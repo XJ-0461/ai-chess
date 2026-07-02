@@ -7,9 +7,11 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <so_5/all.hpp>
 #include <nlohmann/json.hpp>
+#include <oneapi/tbb/concurrent_vector.h>
 
 #include "IPlayer.hpp"
 #include "AgentConnection.hpp"
@@ -21,6 +23,7 @@
 #include "Application/AgentChat/Message/GameFlow.hpp"
 #include "Application/AgentChat/Message/Utility.hpp"
 #include "Application/AgentChat/Message/BoardState.hpp"
+#include "Application/AgentChat/Message/Usage.hpp"
 #include "Game/Execution/Message/PlayerAction.hpp"
 #include "Utility/Log/Switch.hpp"
 
@@ -50,13 +53,17 @@ public:
         so_5::mbox_t orchestrator_mbox,
         std::shared_ptr<AgentTrajectory> trajectory,
         std::shared_ptr<Board> board,
-        std::shared_ptr<std::mutex> board_mutex
+        std::shared_ptr<std::mutex> board_mutex,
+        std::shared_ptr<tbb::concurrent_vector<agent::message::ModelUsage>> usage_history,
+        std::shared_ptr<agent::message::ModelPricing> model_pricing
     ) : config_{std::move(config)},
         colour_{colour},
         orchestrator_mbox_{std::move(orchestrator_mbox)},
         trajectory_{std::move(trajectory)},
         board_{std::move(board)},
         board_mutex_{std::move(board_mutex)},
+        usage_history_{std::move(usage_history)},
+        model_pricing_{std::move(model_pricing)},
         connection_{config_.zmq_endpoint} {}
 
     // Blocking: opens the socket and performs the handshake. Intended to run on
@@ -90,6 +97,9 @@ public:
         if (const auto ack = WaitForType(msg::SetupResponse::kTypeTag, std::chrono::seconds(30))) {
             const auto response = ack->get<msg::SetupResponse>();
             personality_ = response.personality;
+            if (model_pricing_) {
+                *model_pricing_ = response.pricing;
+            }
             trajectory_->UpdateModelName(response.model);
             trajectory_->AddEvent(agent::InfoEvent{"Agent ready: " + response.model + " [" + response.personality + "]"});
             trajectory_->SetState(AgentState::Idle);
@@ -125,6 +135,17 @@ public:
     }
 
     [[nodiscard]] std::shared_ptr<AgentTrajectory> GetTrajectory() const { return trajectory_; }
+
+    // Session cost is computed from the shared usage/pricing slots (which are also
+    // reachable via GameContext, so they survive this player); convenience for
+    // callers holding the player. The command path computes the same way.
+    [[nodiscard]]
+    agent::message::SessionCostEstimate EstimateSessionCost() const {
+        if (!model_pricing_ || !usage_history_) {
+            return {};
+        }
+        return agent::message::EstimateSessionCost(*model_pricing_, *usage_history_);
+    }
 
 private:
     static constexpr auto kRequestTimeout = std::chrono::seconds(180);
@@ -263,6 +284,23 @@ private:
             RespondBoardState(event.value("id", std::string{}));
             return false;
         }
+        if (type == msg::ModelUsage::kTypeTag) {
+            // Per-turn token usage; accumulated for session cost estimation. Sent
+            // before the terminal decision, so it lands in this same loop. The
+            // concurrent_vector is safe to append while the command thread reads.
+            const auto usage = event.get<msg::ModelUsage>();
+            CHESS_TRACE_LOG("stdout_chess",
+                {"operation", "model_usage_received"},
+                {"colour", colour_ == White ? "white" : "black"},
+                {"input_tokens", std::to_string(usage.input_tokens)},
+                {"output_tokens", std::to_string(usage.output_tokens)},
+                {"usage_history_attached", usage_history_ ? "true" : "false"}
+            );
+            if (usage_history_) {
+                usage_history_->push_back(usage);
+            }
+            return false;
+        }
 
         // --- Terminal game-flow results (routed to the orchestrator) ---
         if (type == msg::MoveResponse::kTypeTag) {
@@ -371,6 +409,11 @@ private:
     std::shared_ptr<Board> board_;
     std::shared_ptr<std::mutex> board_mutex_;
     std::string personality_{};
+
+    // Shared with GameContext: this player appends per-turn usage here and writes
+    // pricing once at setup; the game::estimate_cost command reads them.
+    std::shared_ptr<tbb::concurrent_vector<agent::message::ModelUsage>> usage_history_;
+    std::shared_ptr<agent::message::ModelPricing> model_pricing_;
 
     AgentConnection connection_;
     std::jthread request_thread_; // declared last: joined first on destruction

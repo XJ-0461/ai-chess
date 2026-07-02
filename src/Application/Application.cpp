@@ -715,6 +715,10 @@ std::shared_ptr<chess::game::GameContext> Application::CreateGame(const chess::g
     context->move_log = std::make_shared<chess::game::GameMoveLog>();
     context->white_trajectory = std::make_shared<AgentTrajectory>();
     context->black_trajectory = std::make_shared<AgentTrajectory>();
+    context->white_usage_history = std::make_shared<tbb::concurrent_vector<chess::agent::message::ModelUsage>>();
+    context->black_usage_history = std::make_shared<tbb::concurrent_vector<chess::agent::message::ModelUsage>>();
+    context->white_model_pricing = std::make_shared<chess::agent::message::ModelPricing>();
+    context->black_model_pricing = std::make_shared<chess::agent::message::ModelPricing>();
 
     so_5::environment_t& env = m_GameOrchestrationEnvironment->environment();
 
@@ -746,6 +750,10 @@ std::shared_ptr<chess::game::GameContext> Application::CreateGame(const chess::g
         state.move_log = context->move_log;                 // per-move outcomes (views read)
         state.white_trajectory = context->white_trajectory; // streamed agent events -> views
         state.black_trajectory = context->black_trajectory;
+        state.white_usage_history = context->white_usage_history; // per-turn token usage (cost estimate)
+        state.black_usage_history = context->black_usage_history;
+        state.white_model_pricing = context->white_model_pricing; // per-token pricing (cost estimate)
+        state.black_model_pricing = context->black_model_pricing;
         state.gaunt_context = gaunt_game_ctx;               // telemetry context for this game
         orchestrator = coop.make_agent<chess::game::execution::GameOrchestrator>(std::move(state));
     });

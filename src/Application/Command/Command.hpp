@@ -33,6 +33,13 @@ struct QueryMatchResultCommand {
     std::string game_id{};
 };
 
+// Query the estimated session cost (per side) of a game. Answered immediately
+// from the accumulated per-turn token usage and captured model pricing, so it
+// can be issued mid-game or after conclusion.
+struct EstimateCostCommand {
+    std::string game_id{};
+};
+
 // Window configuration for spawned views (spectator windows, etc.).
 struct WindowSize {
     std::uint32_t width{1920};
@@ -70,6 +77,7 @@ using Command = std::variant<
     ConfigureGameCommand,
     StartGameCommand,
     QueryMatchResultCommand,
+    EstimateCostCommand,
     OpenSpectatorViewCommand,
     SetMoveHistoryBarCommand
 >;

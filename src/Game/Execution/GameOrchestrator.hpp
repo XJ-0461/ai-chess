@@ -262,6 +262,10 @@ private:
         const auto configuration = state_.game_configuration;
         const auto white_trajectory = state_.white_trajectory;
         const auto black_trajectory = state_.black_trajectory;
+        const auto white_usage_history = state_.white_usage_history;
+        const auto black_usage_history = state_.black_usage_history;
+        const auto white_model_pricing = state_.white_model_pricing;
+        const auto black_model_pricing = state_.black_model_pricing;
 
         const auto make_config = [configuration](const chess::game::AgentConfiguration& agent, const char* color) {
             return player::RemoteAgentPlayerConfiguration{
@@ -278,14 +282,16 @@ private:
 
         const auto setup_white = [=]() -> void {
             const auto white = std::make_shared<player::RemoteAgentPlayer>(
-                make_config(configuration.white, "WHITE"), White, self_mbox, white_trajectory, board, board_mutex);
+                make_config(configuration.white, "WHITE"), White, self_mbox, white_trajectory, board, board_mutex,
+                white_usage_history, white_model_pricing);
             white->Connect();
             so_5::send<AttachPlayer>(self_mbox, White, white);
         };
 
         const auto setup_black = [=]() -> void {
             const auto black = std::make_shared<player::RemoteAgentPlayer>(
-                make_config(configuration.black, "BLACK"), Black, self_mbox, black_trajectory, board, board_mutex);
+                make_config(configuration.black, "BLACK"), Black, self_mbox, black_trajectory, board, board_mutex,
+                black_usage_history, black_model_pricing);
             black->Connect();
             so_5::send<AttachPlayer>(self_mbox, Black, black);
         };

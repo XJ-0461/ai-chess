@@ -2,6 +2,8 @@
 #include <string>
 #include <nlohmann/json.hpp>
 
+#include "Usage.hpp"
+
 namespace chess::agent::message {
 
 struct Ping {
@@ -47,12 +49,14 @@ struct SetupResponse {
     std::string model;
     std::string color;
     std::string personality;
+    ModelPricing pricing;  // per-token cost reported by the agent at setup time
 };
 
 inline void from_json(const nlohmann::json& j, SetupResponse& m) {
     m.model = j.value("model", "Unknown Model");
     m.color = j.value("color", "unknown");
     m.personality = j.value("personality", "");
+    m.pricing = j.value("pricing", ModelPricing{});
 }
 
 } // namespace chess::agent::message

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <format>
 #include <functional>
 #include <future>
 #include <iostream>
@@ -14,8 +15,11 @@
 #include <nlohmann/json.hpp>
 #include <so_5/all.hpp>
 
+#include <oneapi/tbb/concurrent_vector.h>
+
 #include "Game/GameContext.hpp"
 #include "Game/GameLifecyclePhase.hpp"
+#include "Application/AgentChat/Message/Usage.hpp"
 #include "Game/Configuration/GameConfiguration.hpp"
 #include "Game/Execution/MatchResult.hpp"
 #include "Game/Execution/Message/Lifecycle.hpp"
@@ -70,7 +74,9 @@ private:
         // Lifecycle commands are skipped once a prior command has aborted the
         // run; queries are always answered (they have no ordering dependency and
         // a caller is waiting on the reply).
-        if (aborted_ && !std::holds_alternative<QueryMatchResultCommand>(message->command)) {
+        if (aborted_
+            && !std::holds_alternative<QueryMatchResultCommand>(message->command)
+            && !std::holds_alternative<EstimateCostCommand>(message->command)) {
             return;
         }
         current_reply_ = message->reply;
@@ -139,6 +145,33 @@ private:
         }
     }
 
+    void Execute(const EstimateCostCommand& command) {
+        std::shared_ptr<chess::game::GameContext> context;
+        if (callbacks_.find_game) {
+            context = callbacks_.find_game(command.game_id);
+        }
+
+        nlohmann::json response;
+        response["type"] = "estimate_cost_response";
+        response["game_id"] = command.game_id;
+        if (!context) {
+            std::cerr << "[ExternalCommandExecutor] estimate_cost: unknown game id '" << command.game_id << "'\n";
+            response["status"] = 404;
+            response["estimated_white_cost"] = CostToJson(nullptr, nullptr);
+            response["estimated_black_cost"] = CostToJson(nullptr, nullptr);
+        } else {
+            // Answered immediately from the accumulated usage + captured pricing,
+            // so the estimate is valid mid-game as well as after conclusion.
+            response["status"] = 200;
+            response["estimated_white_cost"] = CostToJson(context->white_model_pricing, context->white_usage_history);
+            response["estimated_black_cost"] = CostToJson(context->black_model_pricing, context->black_usage_history);
+        }
+
+        if (current_reply_) {
+            current_reply_(response);
+        }
+    }
+
     void Execute(const OpenSpectatorViewCommand& command) {
         if (!callbacks_.open_spectator_view) {
             std::cerr << "[ExternalCommandExecutor] open_spectator_view: no callback registered\n";
@@ -185,6 +218,31 @@ private:
             to_json(json_response, response);
             current_reply_(json_response);
         }
+    }
+
+    // Rounds a USD spend to whole cents. Anything under a cent isn't meaningful
+    // to us, so it collapses to 0.00. std::format gives clean fixed-point
+    // rounding (no scientific notation); parsing it back keeps the JSON numeric.
+    [[nodiscard]]
+    static double RoundToCents(const double spend) {
+        return std::stod(std::format("{:.2f}", spend));
+    }
+
+    // Serializes one side's session cost estimate as { input, output } USD spend,
+    // rounded to cents. Null slots (missing game / not yet set up) yield a zeroed
+    // estimate.
+    [[nodiscard]] static nlohmann::json CostToJson(
+        const std::shared_ptr<chess::agent::message::ModelPricing>& pricing,
+        const std::shared_ptr<tbb::concurrent_vector<chess::agent::message::ModelUsage>>& usage
+    ) {
+        chess::agent::message::SessionCostEstimate estimate;
+        if (pricing && usage) {
+            estimate = chess::agent::message::EstimateSessionCost(*pricing, *usage);
+        }
+        return nlohmann::json{
+            {"input", RoundToCents(estimate.input_token_spend)},
+            {"output", RoundToCents(estimate.output_token_spend)}
+        };
     }
 
     // Builds the JSON match-result response. In the intended "watch then query"

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { ZmqClient } from "./zmq-client";
-import { OpenRouterClient } from "./openrouter-client";
+import { OpenRouterClient, ModelPricing } from "./openrouter-client";
 
 // Set up command line argument parsing
 const program = new Command();
@@ -146,11 +146,15 @@ async function main() {
           personality = await openRouterClient.generatePersonality(agentName, myColor || "WHITE");
           console.log(`[${agentName}] Generated personality: "${personality}"`);
 
+          const pricing: ModelPricing = await openRouterClient.fetchPricing();
+          console.log(`[${agentName}] Model pricing (USD/token) in=${pricing.input.cost} out=${pricing.output.cost}`);
+
           await safeSend({
             type: "setup_ack",
             color: myColor,
             model: modelName,
-            personality: personality
+            personality: personality,
+            pricing: pricing
           });
           break;
         }
@@ -320,6 +324,10 @@ async function main() {
         }
       );
 
+      // Report this turn's token usage before the terminal decision so the C++
+      // side consumes it within the same request loop.
+      await safeSend({ type: "model_usage", ...openRouter.getAndResetTurnUsage() });
+
       if (result.type === "move") {
         console.log(`[${name}] Generated move decision: ${result.move}`);
         await safeSend({ type: "move_decision", long_algebraic_move_string: result.move });
@@ -367,6 +375,7 @@ async function main() {
       );
 
       console.log(`[${name}] Draw offer decision: ${accepted ? "ACCEPTED" : "DECLINED"}`);
+      await safeSend({ type: "model_usage", ...openRouter.getAndResetTurnUsage() });
       await safeSend({ type: "draw_decision", accept: accepted });
     } catch (err) {
       console.error(`[${name}] Failed to handle draw offer:`, err);
@@ -400,6 +409,7 @@ async function main() {
         }
       );
 
+      await safeSend({ type: "model_usage", ...openRouter.getAndResetTurnUsage() });
       await safeSend({ type: "end_turn", id: `${name}-retro-done` });
     } catch (err) {
       console.error(`[${name}] Failed to generate retrospective:`, err);

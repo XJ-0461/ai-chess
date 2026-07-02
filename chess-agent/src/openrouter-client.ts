@@ -1,6 +1,18 @@
 import { OpenRouter, tool, hasToolCall, ConversationState } from "@openrouter/agent";
 import { z } from "zod";
 
+// Pricing expressed as a ratio (mirrors the C++ CostPerToken / ModelPricing in
+// src/Application/AgentChat/Message/Usage.hpp). USD-per-token == cost / per_tokens.
+export interface CostPerToken {
+  cost: number;
+  per_tokens: number;
+}
+
+export interface ModelPricing {
+  input: CostPerToken;
+  output: CostPerToken;
+}
+
 /**
  * OpenRouterClient handles all interactions with the OpenRouter Agent SDK.
  * It is modeled strictly after the "Headless Agent" pattern found in the 
@@ -14,11 +26,72 @@ export class OpenRouterClient {
   private response_id = 0;
   private quip_counter = 0;  // Unique counter for quip IDs within a response
   private lastRequestTime = 0;
+  private apiKey: string;
+  // Token usage accumulated across every model call within the current turn.
+  // Reset when the turn's usage is drained via getAndResetTurnUsage().
+  private turnUsage = { input_tokens: 0, output_tokens: 0 };
 
   constructor(apiKey: string, modelName: string) {
     // NOTE: Pattern from create-headless-agent/sample/src/agent.ts (line 27)
     this.client = new OpenRouter({ apiKey });
     this.modelName = modelName;
+    this.apiKey = apiKey;
+  }
+
+  /**
+   * Fetches per-token pricing for the configured model from the OpenRouter
+   * models catalog. OpenRouter reports price as a USD-per-token string, so
+   * per_tokens is 1. Returns zero pricing on any failure (non-fatal — cost
+   * estimation simply degrades to 0 rather than blocking the game).
+   */
+  public async fetchPricing(): Promise<ModelPricing> {
+    const zero: ModelPricing = { input: { cost: 0, per_tokens: 1 }, output: { cost: 0, per_tokens: 1 } };
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/models", {
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+      });
+      if (!response.ok) {
+        console.error(`[OpenRouter] Pricing fetch failed: HTTP ${response.status}`);
+        return zero;
+      }
+      const body = await response.json();
+      const model = (body?.data ?? []).find((m: any) => m.id === this.modelName);
+      if (!model?.pricing) {
+        console.error(`[OpenRouter] No pricing found for model ${this.modelName}`);
+        return zero;
+      }
+      const pricing: ModelPricing = {
+        input: { cost: Number(model.pricing.prompt) || 0, per_tokens: 1 },
+        output: { cost: Number(model.pricing.completion) || 0, per_tokens: 1 },
+      };
+      return pricing;
+    } catch (error: any) {
+      console.error(`[OpenRouter] Pricing fetch error:`, error?.message ?? error);
+      return zero;
+    }
+  }
+
+  /**
+   * Accumulates the token usage from a completed model response into the
+   * current turn's tally. Safe to call after every getResponse().
+   */
+  private accumulateUsage(response: { usage?: { inputTokens?: number | null; outputTokens?: number | null } | null }): void {
+    const usage = response?.usage;
+    if (!usage) {
+        return;
+    }
+    this.turnUsage.input_tokens += usage.inputTokens ?? 0;
+    this.turnUsage.output_tokens += usage.outputTokens ?? 0;
+  }
+
+  /**
+   * Returns the tokens used since the last drain and resets the tally. Called
+   * once per turn so multi-call turns sum correctly and turns don't double-count.
+   */
+  public getAndResetTurnUsage(): { input_tokens: number; output_tokens: number } {
+    const snapshot = { ...this.turnUsage };
+    this.turnUsage = { input_tokens: 0, output_tokens: 0 };
+    return snapshot;
   }
 
   private async enforceRateLimit(): Promise<void> {
@@ -319,7 +392,7 @@ Decide your move, explain why, and then call \`make_move\`. Alternatively, call 
           };
 
           await Promise.all([streamText(), streamItems()]);
-          await result.getResponse();
+          this.accumulateUsage(await result.getResponse());
 
           if (decision) {
             return decision;
@@ -423,7 +496,7 @@ const streamItems = async () => {
 };
 
 await Promise.all([streamText(), streamItems()]);
-await result.getResponse();
+ this.accumulateUsage(await result.getResponse());
 return accepted;
 }
 
@@ -518,6 +591,6 @@ Please analyze the game and provide your retrospective quips, then call \`end_tu
         tools: [quipTool, endTurnTool],
         stopWhen: [hasToolCall("end_turn")]
     });
-    await result.getResponse();
+    this.accumulateUsage(await result.getResponse());
   }
 }

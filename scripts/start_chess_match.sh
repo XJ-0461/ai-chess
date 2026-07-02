@@ -44,6 +44,10 @@ CHESS_AGENT_CLIENT=""
 GAUNT_TELEMETRY_XML_OUTPUT_FILE=""
 COMMANDS_FILE=""
 
+# Runtime ZMQ command server port (same as the container's orchestrate.py). The
+# game::estimate_cost poller below talks to this; requires python3 + pyzmq.
+COMMAND_SERVER_PORT=5599
+
 # Print usage instructions
 print_usage() {
     echo "Usage: $0 [options]"
@@ -139,11 +143,34 @@ fi
 
 # Store spawned process PIDs for termination handling
 AGENT_PIDS=()
+# PID of the background game::estimate_cost poller (empty until started).
+COST_POLLER_PID=""
+
+# Query the runtime game::estimate_cost command once and print the JSON reply.
+# Mirrors orchestrate.py's CommandClient: a DEALER that sends {type,id,detail}
+# and reads one reply frame. Port and game id are passed as argv.
+query_estimated_game_cost() {
+    python3 - "$COMMAND_SERVER_PORT" "$GAME_ID" <<'PYEOF'
+import sys, uuid, zmq
+port, game_id = sys.argv[1], sys.argv[2]
+sock = zmq.Context.instance().socket(zmq.DEALER)
+sock.setsockopt(zmq.LINGER, 0)
+sock.connect(f"tcp://127.0.0.1:{port}")
+sock.send_json({"type": "game::estimate_cost", "id": uuid.uuid4().hex,
+                "detail": {"game_id": game_id}})
+print(sock.recv_json() if sock.poll(5000) else {"error": "timeout"})
+PYEOF
+}
 
 # Process cleanup handler
 cleanup() {
     local exit_status=$?
     echo -e "\n[start_chess_match] Script exiting. Cleaning up background agent processes..."
+    if [[ -n "$COST_POLLER_PID" ]] && kill -0 "$COST_POLLER_PID" 2>/dev/null; then
+        echo "[start_chess_match] Stopping estimate_cost poller PID $COST_POLLER_PID..."
+        kill "$COST_POLLER_PID" 2>/dev/null || true
+        wait "$COST_POLLER_PID" 2>/dev/null || true
+    fi
     for pid in "${AGENT_PIDS[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then
             echo "[start_chess_match] Terminating agent PID $pid..."
@@ -257,9 +284,24 @@ echo "[start_chess_match] Launching Chess with command file $COMMANDS_FILE..."
 chmod +x "$CHESS_SERVER"
 
 # Assemble the Chess server arguments, appending the optional telemetry flag.
-CHESS_SERVER_ARGS=(--commands "$COMMANDS_FILE")
+# The command-server endpoint enables the runtime ZMQ command interface that the
+# estimate_cost poller (below) queries.
+CHESS_SERVER_ARGS=(--commands "$COMMANDS_FILE" --command-server-endpoint "tcp://127.0.0.1:$COMMAND_SERVER_PORT")
 if [[ -n "$GAUNT_TELEMETRY_XML_OUTPUT_FILE" ]]; then
     CHESS_SERVER_ARGS+=(--gaunt-telemetry-xml-output-file "$GAUNT_TELEMETRY_XML_OUTPUT_FILE")
 fi
+
+# Periodically exercise game::estimate_cost (every 2 min) so we can confirm the
+# command is answering while the match runs. Runs until the script exits; the
+# initial wait also lets the command server come up and the game start first.
+estimate_cost_poller() {
+    while true; do
+        sleep 120
+        echo "[start_chess_match] game::estimate_cost ->"
+        query_estimated_game_cost || echo "[start_chess_match] estimate_cost query failed"
+    done
+}
+estimate_cost_poller &
+COST_POLLER_PID=$!
 
 "$CHESS_SERVER" "${CHESS_SERVER_ARGS[@]}"

@@ -19,6 +19,7 @@ result.json is always written (success=false on any unexpected failure).
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -33,6 +34,12 @@ DISPLAY = os.environ.get("DISPLAY", ":99")
 
 CHESS_BINARY = "/app/Chess"
 AGENT_ENTRY = "/app/chess-agent/dist/index.js"
+
+# The render loop's only frame throttle is vsync, which is a no-op under Xvfb +
+# llvmpipe (no vblank), so it free-runs and the software rasterizer pins every
+# core. We run the game under MangoHud, whose OpenGL layer caps the buffer-swap
+# rate via its fps_limit (with the overlay hidden, no_display=1).
+CHESS_FPS_LIMIT = os.environ.get("CHESS_FPS_LIMIT", "60")
 
 WHITE_PORT = 5555
 BLACK_PORT = 5556
@@ -115,9 +122,9 @@ def parse_config():
 
 
 # --- Process launch ----------------------------------------------------------
-def launch_process(name, args):
+def launch_process(name, args, env=None):
     log.info("Launching %s: %s", name, " ".join(args))
-    proc = subprocess.Popen(args)
+    proc = subprocess.Popen(args, env=env)
     _processes[name] = proc
     return proc
 
@@ -138,14 +145,25 @@ def launch_agents():
 
 
 def launch_game(gaunt_output):
-    launch_process(
-        "chess",
-        [CHESS_BINARY,
-         "--command-server-endpoint", f"tcp://127.0.0.1:{COMMAND_PORT}",
-         "--white-endpoint", f"tcp://127.0.0.1:{WHITE_PORT}",
-         "--black-endpoint", f"tcp://127.0.0.1:{BLACK_PORT}",
-         "--gaunt-telemetry-xml-output-file", gaunt_output],
-    )
+    chess_cmd = [
+        CHESS_BINARY,
+        "--command-server-endpoint", f"tcp://127.0.0.1:{COMMAND_PORT}",
+        "--white-endpoint", f"tcp://127.0.0.1:{WHITE_PORT}",
+        "--black-endpoint", f"tcp://127.0.0.1:{BLACK_PORT}",
+        "--gaunt-telemetry-xml-output-file", gaunt_output,
+    ]
+    # Cap the render loop's FPS with MangoHud so the software rasterizer can't
+    # saturate every core. Fall back to an uncapped launch if mangohud is missing
+    # (e.g. running the orchestrator locally outside the container).
+    env = None
+    if shutil.which("mangohud"):
+        chess_cmd = ["mangohud", *chess_cmd]
+        env = dict(os.environ)
+        # no_display=1 hides the overlay so it never renders into the capture.
+        env["MANGOHUD_CONFIG"] = f"fps_limit={CHESS_FPS_LIMIT},no_display=1"
+    else:
+        log.warning("mangohud not found; running Chess without an FPS cap")
+    launch_process("chess", chess_cmd, env=env)
 
 
 def terminate_all():
@@ -219,6 +237,56 @@ def extract_x11_window_id(response):
 
 
 # --- Recording ---------------------------------------------------------------
+_video_encoder = None
+
+
+def _available_encoders():
+    """Set of encoder names compiled into this ffmpeg build."""
+    rc, out = run_quiet(["ffmpeg", "-hide_banner", "-encoders"])
+    names = set()
+    if rc == 0:
+        for line in out.splitlines():
+            parts = line.split()
+            # Encoder lines look like: " V....D libx264   H.264 ...". The first
+            # token is the capability flags (e.g. "V....D"); the second is the name.
+            if len(parts) >= 2 and parts[0] and set(parts[0]) <= set("VASFXBD."):
+                names.add(parts[1])
+    return names
+
+
+def pick_video_encoder():
+    """Choose the best H.264-capable encoder available, cached after first call.
+
+    Fedora's ffmpeg-free ships WITHOUT libx264 (patent-stripped), so we probe for
+    what's actually present. Preference: real H.264 (best HLS/browser support),
+    then mpeg2video as a universally-available MPEG-TS-compatible last resort.
+    """
+    global _video_encoder
+    if _video_encoder is not None:
+        return _video_encoder
+    avail = _available_encoders()
+    for name in ("libx264", "libopenh264", "h264_vaapi", "mpeg2video"):
+        if name in avail:
+            _video_encoder = name
+            break
+    else:
+        _video_encoder = "mpeg2video"
+    log.info("Selected video encoder: %s", _video_encoder)
+    return _video_encoder
+
+
+def video_encoder_args(enc):
+    """ffmpeg -c:v flags tuned per encoder (they don't share option names)."""
+    if enc == "libx264":
+        return ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
+    if enc == "libopenh264":
+        # libopenh264 has no -preset; drive it with a target bitrate instead.
+        return ["-c:v", "libopenh264", "-b:v", "6M", "-pix_fmt", "yuv420p"]
+    if enc == "mpeg2video":
+        return ["-c:v", "mpeg2video", "-qscale:v", "4", "-pix_fmt", "yuv420p"]
+    return ["-c:v", enc, "-pix_fmt", "yuv420p"]
+
+
 def audio_available():
     rc, out = run_quiet(["pactl", "list", "short", "sources"])
     return rc == 0 and PULSE_MONITOR in out
@@ -237,8 +305,8 @@ def start_recording():
     ]
     if with_audio:
         args += ["-f", "pulse", "-i", PULSE_MONITOR]
+    args += video_encoder_args(pick_video_encoder())
     args += [
-        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
         # Force keyframes every 2s so the capture can be stream-copied into
         # aligned 2-second HLS segments afterwards.
         "-force_key_frames", "expr:gte(t,n_forced*2)",
@@ -305,7 +373,7 @@ def convert_to_hls():
         return
     log.warning("Stream-copy HLS failed (%s); re-encoding", out.strip()[:400])
     rc, out = run_quiet(
-        base + ["-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac"] + hls
+        base + video_encoder_args(pick_video_encoder()) + ["-c:a", "aac"] + hls
     )
     if rc == 0 and os.path.exists(HLS_PLAYLIST):
         log.info("HLS conversion done (re-encode)")
@@ -313,13 +381,43 @@ def convert_to_hls():
         log.error("HLS conversion failed: %s", out.strip()[:400])
 
 
-def write_result(success):
+def write_result(success, cost_estimate=None):
     try:
         with open(RESULT_JSON, "w") as f:
-            json.dump({"result": {"success": bool(success)}}, f)
-        log.info("Wrote %s: success=%s", RESULT_JSON, success)
+            json.dump({
+                "result": {"success": bool(success)},
+                "model_cost_estimate": cost_estimate,
+            }, f)
+        log.info("Wrote %s: success=%s cost_estimate=%s",
+                 RESULT_JSON, success, "present" if cost_estimate else "null")
     except Exception as exc:  # noqa: BLE001
         log.error("Failed to write result.json: %s", exc)
+
+
+def query_cost_estimate(client, stream_id):
+    """Query the game's per-side session cost estimate.
+
+    Returns the {"white": ..., "black": ...} dict of raw float-USD spend, or
+    None if the estimate could not be obtained (command error/timeout or a
+    non-200 status such as an unknown game id)."""
+    try:
+        resp = client.send("game::estimate_cost", {"game_id": stream_id})
+    except Exception as exc:  # noqa: BLE001
+        log.warning("game::estimate_cost failed: %s", exc)
+        return None
+
+    if resp.get("status") != 200:
+        log.warning("game::estimate_cost -> status=%s; no cost estimate",
+                    resp.get("status"))
+        return None
+
+    def side(d):
+        d = d or {}
+        return {"input_token_cost": d.get("input", 0.0),
+                "output_token_cost": d.get("output", 0.0)}
+
+    return {"white": side(resp.get("estimated_white_cost")),
+            "black": side(resp.get("estimated_black_cost"))}
 
 
 # --- Main flow ---------------------------------------------------------------
@@ -422,17 +520,22 @@ def run_match():
         log.info("Holding recording for %ds", POST_WIN_HOLD_S)
         time.sleep(POST_WIN_HOLD_S)
 
+    # 9. Query the per-side cost estimate while the game process is still alive.
+    cost_estimate = query_cost_estimate(client, stream_id)
+
     client.close()
-    return success
+    return success, cost_estimate
 
 
 def main():
     success = False
+    cost_estimate = None
     try:
-        success = run_match()
+        success, cost_estimate = run_match()
     except Exception as exc:  # noqa: BLE001
         log.exception("Match failed: %s", exc)
         success = False
+        cost_estimate = None
     finally:
         ffmpeg = _processes.get("ffmpeg")
         if ffmpeg is not None:
@@ -442,7 +545,7 @@ def main():
             convert_to_hls()
         else:
             log.error("No capture file produced; camera output will be empty")
-        write_result(success)
+        write_result(success, cost_estimate)
         try:
             os.sync()
         except Exception:  # noqa: BLE001

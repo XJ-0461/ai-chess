@@ -6,6 +6,7 @@
 #include <string>
 
 #include <so_5/all.hpp>
+#include <oneapi/tbb/concurrent_vector.h>
 
 #include "Chess/Board.h"
 #include "Game/Configuration/GameConfiguration.hpp"
@@ -13,6 +14,7 @@
 #include "Game/GameMoveLog.hpp"
 #include "Game/Execution/MatchResult.hpp"
 #include "Utility/AgentTrajectory.h"
+#include "Application/AgentChat/Message/Usage.hpp"
 
 namespace chess::game {
 
@@ -47,9 +49,15 @@ struct GameContext {
     std::shared_ptr<execution::MatchResult> result{};
 
     // Per-player agent trajectories: written by the RemoteAgentPlayers (on their
-    // request threads) and rendered live by spectator-view sidebars.
+    // request threads) and rendered live by spectator-view sidebars. The parallel
+    // usage-history / pricing slots feed the game::estimate_cost command; the
+    // concurrent_vector lets the player append while the command thread reads.
     std::shared_ptr<AgentTrajectory> white_trajectory{};
+    std::shared_ptr<tbb::concurrent_vector<agent::message::ModelUsage>> white_usage_history{};
+    std::shared_ptr<agent::message::ModelPricing> white_model_pricing{};
     std::shared_ptr<AgentTrajectory> black_trajectory{};
+    std::shared_ptr<tbb::concurrent_vector<agent::message::ModelUsage>> black_usage_history{};
+    std::shared_ptr<agent::message::ModelPricing> black_model_pricing{};
 
     // Independent per-game SFX/Music mixers (allocated in CreateGame; their
     // MIX devices are opened on the main thread). Volume is controlled from the

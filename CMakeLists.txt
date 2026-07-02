@@ -282,6 +282,7 @@ cool_vcpkg_DeclarePackage(NAME cnats)
 cool_vcpkg_DeclarePackage(NAME tiny-process-library)
 cool_vcpkg_DeclarePackage(NAME gtest)
 cool_vcpkg_DeclarePackage(NAME openssl)
+cool_vcpkg_DeclarePackage(NAME tbb)
 
 cool_vcpkg_InstallPackages()
 
@@ -300,6 +301,7 @@ find_package(spdlog CONFIG REQUIRED)
 #find_package(OpenSSL REQUIRED)
 #find_package(cnats CONFIG REQUIRED)
 find_package(tiny-process-library CONFIG REQUIRED)
+find_package(TBB CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 
 # --- Gaunt Telemetry ---
@@ -422,5 +424,6 @@ target_link_libraries(
     cpr::cpr
     spdlog::spdlog
     gaunt::generated::chess_coliseum-cpp
+    TBB::tbb
 )
 
